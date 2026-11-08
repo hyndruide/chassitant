@@ -293,7 +293,9 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             response_text = result.get("response", "").strip()
             if not response_text:
                 if not result.get("success"):
-                    response_text = f"Erreur : {result.get('error', 'Aucune réponse reçue de l\'agent.')}"
+                    default_err = "Aucune réponse reçue de l'agent."
+                    err_msg = result.get("error", default_err)
+                    response_text = f"Erreur : {err_msg}"
                 else:
                     response_text = "Action exécutée."
 
