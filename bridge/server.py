@@ -362,7 +362,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.CREATED, {"success": True, "conversation": conv})
             return
 
-        # 2. Send message in a conversation thread
+        # 2. Send message in a conversation thread (Streaming SSE or JSON)
         if path.startswith("/api/conversations/") and path.endswith("/send"):
             if not self.check_authorization():
                 return
@@ -378,47 +378,129 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             model = payload.get("model")
             effort = payload.get("effort")
             timeout = int(payload.get("timeout", 300))
+            stream_mode = payload.get("stream", True)
 
-            logger.info("Executing agy turn for conversation %s: '%s...'", conv_id, prompt[:40])
-            result = self.agy_client.process(
+            if not stream_mode:
+                logger.info("Executing agy sync turn for conversation %s: '%s...'", conv_id, prompt[:40])
+                result = self.agy_client.process(
+                    prompt=prompt,
+                    conversation_id=conv_id,
+                    model=model,
+                    effort=effort,
+                    dangerously_skip_permissions=True,
+                    timeout=timeout,
+                )
+
+                response_text = result.get("response", "").strip()
+                if not response_text:
+                    if not result.get("success"):
+                        default_err = "Aucune réponse reçue de l'agent."
+                        err_msg = result.get("error", default_err)
+                        response_text = f"Erreur : {err_msg}"
+                    else:
+                        response_text = "Action exécutée."
+
+                # Store assistant message
+                assistant_msg = self.conv_store.add_message(
+                    conv_id=conv_id,
+                    role="assistant",
+                    text=response_text,
+                    tokens=result.get("usage", {}).get("total_tokens"),
+                    duration=result.get("duration_seconds"),
+                )
+
+                conv = self.conv_store.get_conversation(conv_id)
+                self.send_json(
+                    HTTPStatus.OK,
+                    {
+                        "success": result.get("success", False),
+                        "message": assistant_msg,
+                        "conversation": conv,
+                        "status": result.get("status"),
+                        "duration_seconds": result.get("duration_seconds"),
+                        "usage": result.get("usage", {}),
+                    },
+                )
+                return
+
+            # Streaming SSE response
+            logger.info("Executing agy stream turn for conversation %s: '%s...'", conv_id, prompt[:40])
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache, no-transform")
+            self.send_header("Connection", "keep-alive")
+            self.send_header("X-Accel-Buffering", "no")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.end_headers()
+            try:
+                self.wfile.flush()
+            except Exception:
+                pass
+
+            def send_sse(ev_obj: dict) -> bool:
+                try:
+                    line = f"data: {json.dumps(ev_obj, ensure_ascii=False)}\n\n"
+                    self.wfile.write(line.encode("utf-8"))
+                    self.wfile.flush()
+                    return True
+                except Exception as ex:
+                    logger.debug("SSE client write failed: %s", ex)
+                    return False
+
+            send_sse({"type": "status", "message": "Initialisation de la réflexion..."})
+
+            steps_log = []
+            full_response_text = ""
+            final_tokens = None
+            final_duration = None
+
+            for event in self.agy_client.process_stream(
                 prompt=prompt,
                 conversation_id=conv_id,
                 model=model,
                 effort=effort,
                 dangerously_skip_permissions=True,
                 timeout=timeout,
-            )
+            ):
+                etype = event.get("type")
+                if etype == "tool_start":
+                    steps_log.append({
+                        "type": "tool",
+                        "tool": event.get("tool"),
+                        "parameters": event.get("parameters"),
+                        "state": "running",
+                    })
+                elif etype == "tool_end":
+                    tname = event.get("tool")
+                    for s in reversed(steps_log):
+                        if s.get("type") == "tool" and s.get("tool") == tname and s.get("state") == "running":
+                            s["state"] = "done"
+                            s["duration"] = event.get("duration", 0)
+                            s["output"] = event.get("output", "")
+                            break
+                elif etype == "done":
+                    full_response_text = event.get("response", "")
+                    final_tokens = event.get("usage", {}).get("total_tokens")
+                    final_duration = event.get("duration_seconds")
 
-            response_text = result.get("response", "").strip()
-            if not response_text:
-                if not result.get("success"):
-                    default_err = "Aucune réponse reçue de l'agent."
-                    err_msg = result.get("error", default_err)
-                    response_text = f"Erreur : {err_msg}"
-                else:
-                    response_text = "Action exécutée."
+                if not send_sse(event):
+                    break
 
-            # Store assistant message
-            assistant_msg = self.conv_store.add_message(
-                conv_id=conv_id,
-                role="assistant",
-                text=response_text,
-                tokens=result.get("usage", {}).get("total_tokens"),
-                duration=result.get("duration_seconds"),
-            )
-
-            conv = self.conv_store.get_conversation(conv_id)
-            self.send_json(
-                HTTPStatus.OK,
-                {
-                    "success": result.get("success", False),
+            if full_response_text:
+                assistant_msg = self.conv_store.add_message(
+                    conv_id=conv_id,
+                    role="assistant",
+                    text=full_response_text,
+                    tokens=final_tokens,
+                    duration=final_duration,
+                    steps=steps_log,
+                )
+                conv = self.conv_store.get_conversation(conv_id)
+                send_sse({
+                    "type": "finished",
                     "message": assistant_msg,
                     "conversation": conv,
-                    "status": result.get("status"),
-                    "duration_seconds": result.get("duration_seconds"),
-                    "usage": result.get("usage", {}),
-                },
-            )
+                })
             return
 
         # 3. Auto-configure MCP with Home Assistant

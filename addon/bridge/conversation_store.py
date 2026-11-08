@@ -115,6 +115,7 @@ class ConversationStore:
         text: str,
         tokens: Optional[int] = None,
         duration: Optional[float] = None,
+        steps: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Add a message to a conversation thread."""
         if conv_id not in self._conversations:
@@ -128,6 +129,7 @@ class ConversationStore:
             "timestamp": time.time(),
             "tokens": tokens,
             "duration": duration,
+            "steps": steps or [],
         }
         conv["messages"].append(msg)
         conv["updated_at"] = time.time()

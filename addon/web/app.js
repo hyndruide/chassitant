@@ -409,6 +409,41 @@
     scrollToBottom();
   }
 
+  function getToolFriendlyName(toolName, params) {
+    const map = {
+      ha_get_overview: "Inventaire des appareils & entités",
+      ha_get_state: "Lecture d'état des capteurs",
+      ha_call_service: "Action sur un appareil (service)",
+      ha_search: "Recherche d'appareils ou entités",
+      ha_config_set_dashboard: "Création / modification du tableau de bord",
+      ha_config_get_dashboard: "Lecture du tableau de bord Lovelace",
+      ha_config_set_automation: "Création d'une automatisation",
+      ha_get_history: "Historique des états et mesures",
+      ha_get_logs: "Consultation des journaux Home Assistant",
+      ha_manage_app: "Gestion des modules et add-ons",
+      ha_get_app: "Statut des modules et add-ons",
+      read_file: "Lecture de fichier",
+      view_file: "Consultation de fichier",
+      write_to_file: "Écriture de fichier",
+      run_command: "Commande système",
+    };
+
+    let label = map[toolName] || toolName;
+    if (params && typeof params === 'object') {
+      if (params.domain && params.service) {
+        label += ` (${params.domain}.${params.service})`;
+      } else if (params.entity_id) {
+        label += ` (${params.entity_id})`;
+      } else if (params.slug) {
+        label += ` (${params.slug})`;
+      } else if (params.Path || params.path) {
+        const p = (params.Path || params.path || '').split(/[/\\\\]/).pop();
+        if (p) label += ` (${p})`;
+      }
+    }
+    return label;
+  }
+
   function renderMessageHtml(msg) {
     const isUser = msg.role === 'user';
     const avatar = isUser ? '👤' : '🤖';
@@ -425,7 +460,43 @@
       }
     }
 
-    const timeStr = msg.created_at ? formatTime(msg.created_at) : '';
+    let stepsHtml = '';
+    if (!isUser && msg.steps && msg.steps.length > 0) {
+      const toolSteps = msg.steps.filter((s) => s.type === 'tool');
+      const countLabel = toolSteps.length > 0 ? `${toolSteps.length} outil(s) exécuté(s)` : `${msg.steps.length} étape(s)`;
+      const durationLabel = msg.duration ? ` • ${msg.duration.toFixed(1)}s` : '';
+      stepsHtml = `
+        <details class="reasoning-details">
+          <summary>
+            <span>🧠</span>
+            <strong>Raisonnement & Outils (${countLabel}${durationLabel})</strong>
+          </summary>
+          <div class="reasoning-body">
+            ${msg.steps.map((st) => {
+              if (st.type === 'tool') {
+                const name = getToolFriendlyName(st.tool, st.parameters);
+                const dur = st.duration ? `<span class="reasoning-step-badge">${st.duration.toFixed(2)}s</span>` : '';
+                return `
+                  <div class="reasoning-step-item done">
+                    <span class="reasoning-step-icon">⚡</span>
+                    <span class="reasoning-step-text"><strong>${escapeHtml(st.tool)}</strong> : ${escapeHtml(name)} ${dur}</span>
+                  </div>
+                `;
+              } else {
+                return `
+                  <div class="reasoning-step-item done">
+                    <span class="reasoning-step-icon">💡</span>
+                    <span class="reasoning-step-text">${escapeHtml(st.message || st.text || '')}</span>
+                  </div>
+                `;
+              }
+            }).join('')}
+          </div>
+        </details>
+      `;
+    }
+
+    const timeStr = msg.created_at || msg.timestamp ? formatTime(msg.created_at || msg.timestamp) : '';
     const metaParts = [];
     if (timeStr) metaParts.push(timeStr);
     if (!isUser && msg.duration) metaParts.push(`${msg.duration.toFixed(1)}s`);
@@ -435,6 +506,7 @@
       <div class="${rowClass}">
         <div class="message-avatar">${avatar}</div>
         <div class="message-bubble">
+          ${stepsHtml}
           ${contentHtml}
           ${metaParts.length > 0 ? `<div class="message-meta">${metaParts.join(' • ')}</div>` : ''}
         </div>
@@ -494,7 +566,7 @@
   }
 
   // ==========================================================================
-  // Send Message Flow
+  // Send Message Flow (Real-time SSE Streaming & Live Reasoning Trace)
   // ==========================================================================
   async function sendMessage() {
     const prompt = el.promptInput.value.trim();
@@ -526,44 +598,225 @@
     el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(userMsg));
     scrollToBottom();
 
-    // Show thinking indicator
+    // Set thinking state
     setThinking(true);
 
+    // Create live stream assistant bubble
+    const streamRowId = 'active-stream-row-' + Date.now();
+    const streamRowHtml = `
+      <div class="message-row assistant" id="${streamRowId}">
+        <div class="message-avatar">🤖</div>
+        <div class="message-bubble" style="min-width: 280px;">
+          <div class="reasoning-box live" id="${streamRowId}-reasoning">
+            <div class="reasoning-header">
+              <div class="reasoning-title">
+                <span class="reasoning-spinner"></span>
+                <span id="${streamRowId}-status">🧠 Réflexion en cours...</span>
+              </div>
+              <span id="${streamRowId}-timer" style="font-family: monospace; opacity: 0.85;">0.0s</span>
+            </div>
+            <div class="reasoning-body" id="${streamRowId}-steps">
+              <div class="reasoning-step-item active">
+                <span class="reasoning-step-icon">🔍</span>
+                <span class="reasoning-step-text">Analyse de la demande...</span>
+              </div>
+            </div>
+          </div>
+          <div id="${streamRowId}-content" class="live-content" style="display: none; margin-top: 8px;"></div>
+        </div>
+      </div>
+    `;
+    el.messagesList.insertAdjacentHTML('beforeend', streamRowHtml);
+    scrollToBottom();
+
+    const streamRow = document.getElementById(streamRowId);
+    const reasoningBox = document.getElementById(`${streamRowId}-reasoning`);
+    const statusText = document.getElementById(`${streamRowId}-status`);
+    const timerText = document.getElementById(`${streamRowId}-timer`);
+    const stepsContainer = document.getElementById(`${streamRowId}-steps`);
+    const contentContainer = document.getElementById(`${streamRowId}-content`);
+
+    const startTime = Date.now();
+    const timerInterval = setInterval(() => {
+      const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+      if (timerText) timerText.textContent = `${elapsed}s`;
+    }, 100);
+
+    let accumulatedText = '';
+    const collectedSteps = [];
+
     try {
-      const data = await apiCall(`/api/conversations/${convId}/send`, {
+      const cleanEndpoint = `api/conversations/${convId}/send`;
+      const url = `${INGRESS_PREFIX}${cleanEndpoint}`;
+
+      const response = await fetch(url, {
         method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
         body: JSON.stringify({
           prompt,
           model: state.settings.model,
           effort: state.settings.effort,
           timeout: state.settings.timeout,
+          stream: true,
         }),
       });
 
-      setThinking(false);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`HTTP ${response.status}: ${errText}`);
+      }
 
-      if (data.conversation) {
-        state.activeConversation = data.conversation;
-        // Update title if changed
-        el.activeConvTitle.textContent = data.conversation.title;
-        // Update conversation in list
-        const convIdx = state.conversations.findIndex((c) => c.id === convId);
-        if (convIdx !== -1) {
-          state.conversations[convIdx] = data.conversation;
-        } else {
-          state.conversations.unshift(data.conversation);
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('text/event-stream')) {
+        // Fallback for standard JSON response
+        const data = await response.json();
+        clearInterval(timerInterval);
+        setThinking(false);
+        if (streamRow) streamRow.remove();
+
+        if (data.conversation) {
+          state.activeConversation = data.conversation;
+          el.activeConvTitle.textContent = data.conversation.title;
+          updateConversationInList(data.conversation);
         }
-        renderDrawerConversations();
+        if (data.message) {
+          state.activeConversation.messages.push(data.message);
+          el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(data.message));
+          setupCodeBlockActions(el.messagesList);
+        }
+        scrollToBottom();
+        return;
       }
 
-      if (data.message) {
-        el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(data.message));
-        setupCodeBlockActions(el.messagesList);
+      // Stream Reader for SSE
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+
+        for (const block of parts) {
+          for (const line of block.split('\n')) {
+            if (line.startsWith('data: ')) {
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr) continue;
+              try {
+                const event = JSON.parse(jsonStr);
+                handleStreamEvent(event);
+              } catch (parseErr) {
+                console.debug('SSE parse warning:', parseErr);
+              }
+            }
+          }
+        }
       }
-      scrollToBottom();
-    } catch (err) {
+
+      function handleStreamEvent(ev) {
+        const type = ev.type;
+
+        if (type === 'status') {
+          if (statusText) statusText.textContent = ev.message || 'Réflexion en cours...';
+        } else if (type === 'init') {
+          if (statusText) statusText.textContent = '🧠 Élaboration du plan d\'action...';
+          if (stepsContainer) {
+            stepsContainer.insertAdjacentHTML(
+              'beforeend',
+              `<div class="reasoning-step-item active">
+                <span class="reasoning-step-icon">⚡</span>
+                <span class="reasoning-step-text">Recherche et préparation des outils...</span>
+              </div>`
+            );
+            scrollToBottom();
+          }
+        } else if (type === 'tool_start') {
+          const friendly = getToolFriendlyName(ev.tool, ev.parameters);
+          if (statusText) statusText.textContent = `⚡ Exécution : ${ev.tool}...`;
+          collectedSteps.push({
+            type: 'tool',
+            tool: ev.tool,
+            parameters: ev.parameters,
+            state: 'running',
+            id: 'step-' + (ev.step_index || collectedSteps.length),
+          });
+          if (stepsContainer) {
+            stepsContainer.insertAdjacentHTML(
+              'beforeend',
+              `<div class="reasoning-step-item active" id="live-tool-${ev.step_index || collectedSteps.length}">
+                <span class="reasoning-step-icon">⚡</span>
+                <span class="reasoning-step-text"><strong>${escapeHtml(ev.tool)}</strong> : ${escapeHtml(friendly)}</span>
+              </div>`
+            );
+            scrollToBottom();
+          }
+        } else if (type === 'tool_end') {
+          const durStr = ev.duration ? `${ev.duration.toFixed(2)}s` : '';
+          const stepEl = document.getElementById(`live-tool-${ev.step_index || ''}`);
+          if (stepEl) {
+            stepEl.className = 'reasoning-step-item done';
+            if (durStr) {
+              stepEl.insertAdjacentHTML('beforeend', `<span class="reasoning-step-badge">${durStr}</span>`);
+            }
+          }
+          if (statusText) statusText.textContent = '🧠 Analyse des résultats reçus...';
+          scrollToBottom();
+        } else if (type === 'text_delta') {
+          accumulatedText += ev.delta || '';
+          if (contentContainer) {
+            contentContainer.style.display = 'block';
+            contentContainer.innerHTML = window.marked
+              ? window.marked.parse(accumulatedText)
+              : escapeHtml(accumulatedText).replace(/\n/g, '<br>');
+            setupCodeBlockActions(contentContainer);
+          }
+          scrollToBottom();
+        } else if (type === 'finished') {
+          clearInterval(timerInterval);
+          setThinking(false);
+
+          if (streamRow) streamRow.remove();
+
+          if (ev.conversation) {
+            state.activeConversation = ev.conversation;
+            el.activeConvTitle.textContent = ev.conversation.title;
+            updateConversationInList(ev.conversation);
+          }
+
+          if (ev.message) {
+            state.activeConversation.messages.push(ev.message);
+            el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(ev.message));
+            setupCodeBlockActions(el.messagesList);
+          }
+          scrollToBottom();
+        } else if (type === 'error') {
+          clearInterval(timerInterval);
+          setThinking(false);
+          if (statusText) {
+            statusText.textContent = `❌ ${ev.error || 'Erreur inconnue'}`;
+          }
+          if (reasoningBox) {
+            reasoningBox.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+          }
+        }
+      }
+
+      clearInterval(timerInterval);
       setThinking(false);
-      console.error('Send message failed:', err);
+
+    } catch (err) {
+      clearInterval(timerInterval);
+      setThinking(false);
+      console.error('Send stream failed:', err);
+      if (streamRow) streamRow.remove();
+
       const errorMsg = {
         role: 'assistant',
         text: `⚠️ **Erreur lors de la communication avec l'assistant :**\n\n${err.message}`,
@@ -575,9 +828,19 @@
     }
   }
 
+  function updateConversationInList(conv) {
+    const convIdx = state.conversations.findIndex((c) => c.id === conv.id);
+    if (convIdx !== -1) {
+      state.conversations[convIdx] = conv;
+    } else {
+      state.conversations.unshift(conv);
+    }
+    renderDrawerConversations();
+  }
+
   function setThinking(active) {
     state.isThinking = active;
-    el.thinkingIndicator.style.display = active ? 'flex' : 'none';
+    el.thinkingIndicator.style.display = 'none'; // We now use the live reasoning box!
     el.btnSend.disabled = active;
     if (active) {
       scrollToBottom();

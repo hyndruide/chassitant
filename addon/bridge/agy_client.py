@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger("chassitant.agy")
 
@@ -303,3 +303,153 @@ class AgyClient:
                 "error": str(err),
                 "conversation_id": conversation_id,
             }
+
+    def process_stream(
+        self,
+        prompt: str,
+        conversation_id: Optional[str] = None,
+        model: Optional[str] = None,
+        effort: Optional[str] = None,
+        dangerously_skip_permissions: bool = True,
+        timeout: int = 300,
+    ) -> Iterator[Dict[str, Any]]:
+        """
+        Execute agy with --output-format stream-json and yield parsed events in real time.
+        Yields events:
+          - {"type": "status", "message": ...}
+          - {"type": "init", "conversation_id": ..., "tools_count": ...}
+          - {"type": "tool_start", "tool": ..., "parameters": ..., "step_index": ...}
+          - {"type": "tool_end", "tool": ..., "duration": ..., "output": ...}
+          - {"type": "text_delta", "delta": ...}
+          - {"type": "done", "response": ..., "duration_seconds": ..., "usage": ...}
+          - {"type": "error", "error": ...}
+        """
+        if not self.is_installed():
+            yield {
+                "type": "error",
+                "error": "Binaire agy introuvable sur le système hôte.",
+            }
+            return
+
+        cmd = [self.binary_path, "-p", prompt, "--output-format", "stream-json"]
+        if conversation_id:
+            cmd.extend(["--conversation", conversation_id])
+        if model and model != "default":
+            cmd.extend(["--model", model])
+        if effort:
+            cmd.extend(["--effort", effort])
+        if dangerously_skip_permissions:
+            cmd.append("--dangerously-skip-permissions")
+        cmd.extend(["--print-timeout", "0s"])
+
+        logger.info("Starting agy stream turn: '%s...'", prompt[:50])
+        yield {
+            "type": "status",
+            "message": "Connexion à Gemini en cours...",
+        }
+
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                bufsize=1,
+            )
+
+            full_response: List[str] = []
+            final_result: Optional[Dict[str, Any]] = None
+
+            for line in proc.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    data = json.loads(line)
+                except Exception:
+                    continue
+
+                event = data.get("event")
+                if event == "init":
+                    init_data = data.get("init", {})
+                    conv_id = data.get("conversation_id")
+                    tools_available = init_data.get("tools", [])
+                    yield {
+                        "type": "init",
+                        "conversation_id": conv_id,
+                        "tools_count": len(tools_available),
+                        "message": "Agent initialisé, analyse de votre demande...",
+                    }
+
+                elif event == "step_update":
+                    su = data.get("step_update", {})
+                    stype = su.get("step_type")
+                    state = su.get("state")
+
+                    if stype == "tool":
+                        tool_name = su.get("tool_name") or "outil"
+                        idx = su.get("step_index")
+                        if state == "ACTIVE":
+                            info = su.get("tool_info", {})
+                            params = info.get("parameters", {})
+                            yield {
+                                "type": "tool_start",
+                                "tool": tool_name,
+                                "parameters": params,
+                                "step_index": idx,
+                            }
+                        elif state == "DONE":
+                            dur = su.get("duration_seconds", 0)
+                            info = su.get("tool_info", {})
+                            output = info.get("output", "")
+                            yield {
+                                "type": "tool_end",
+                                "tool": tool_name,
+                                "duration": dur,
+                                "output": output,
+                                "step_index": idx,
+                            }
+
+                    elif stype == "agent_response":
+                        delta = su.get("text_delta")
+                        if delta:
+                            full_response.append(delta)
+                            yield {
+                                "type": "text_delta",
+                                "delta": delta,
+                            }
+
+                elif event == "result":
+                    final_result = data.get("result", {})
+
+            proc.wait()
+
+            if final_result:
+                resp_text = final_result.get("response") or "".join(full_response)
+                yield {
+                    "type": "done",
+                    "response": resp_text,
+                    "status": final_result.get("status", "SUCCESS"),
+                    "duration_seconds": final_result.get("duration_seconds", 0),
+                    "usage": final_result.get("usage", {}),
+                    "conversation_id": final_result.get("conversation_id") or conversation_id,
+                }
+            else:
+                stderr_text = proc.stderr.read() if proc.stderr else ""
+                resp_text = "".join(full_response)
+                if proc.returncode == 0 and resp_text:
+                    yield {
+                        "type": "done",
+                        "response": resp_text,
+                        "status": "SUCCESS",
+                        "conversation_id": conversation_id,
+                    }
+                else:
+                    err_msg = stderr_text.strip() or f"Le processus agy s'est arrêté (code {proc.returncode})"
+                    yield {"type": "error", "error": err_msg}
+
+        except Exception as err:
+            logger.exception("Stream execution error: %s", err)
+            yield {"type": "error", "error": str(err)}
