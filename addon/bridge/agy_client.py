@@ -102,8 +102,7 @@ class AgyClient:
 
             return False, f"Erreur lors de la vérification ({res.returncode}): {stderr or stdout}"
         except subprocess.TimeoutExpired:
-            # If ping times out, assume still active or slow network
-            return True, "Vérification en attente (délai dépassé)."
+            return False, "Délai d'attente dépassé (authentification requise ou réseau lent)."
         except Exception as err:
             return False, f"Erreur d'exécution: {err}"
 
