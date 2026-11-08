@@ -425,8 +425,11 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
         if path == "/api/mcp/setup":
             if not self.check_authorization():
                 return
-            success, msg = self.mcp_manager.auto_configure_homeassistant_mcp()
-            self.send_json(HTTPStatus.OK, {"success": success, "message": msg})
+            token = payload.get("token") if isinstance(payload, dict) else None
+            url = payload.get("url") if isinstance(payload, dict) else None
+            success, msg = self.mcp_manager.auto_configure_homeassistant_mcp(custom_token=token, custom_url=url)
+            servers = self.mcp_manager.list_mcp_servers()
+            self.send_json(HTTPStatus.OK, {"success": success, "message": msg, "servers": servers})
             return
 
         # 4. Backward-compatible /api/process (for HA Assist conversation entity)
@@ -562,10 +565,9 @@ def main() -> None:
     print("=" * 68, flush=True)
 
     # Auto-configure MCP if inside Home Assistant container
-    if os.getenv("SUPERVISOR_TOKEN"):
-        print("🔌 Détection de Home Assistant OS : Configuration automatique de ha-mcp...", flush=True)
-        mcp_ok, mcp_msg = mcp_mgr.auto_configure_homeassistant_mcp()
-        print(f"   -> {mcp_msg}", flush=True)
+    print("🔌 Configuration automatique du serveur MCP Home Assistant...", flush=True)
+    mcp_ok, mcp_msg = mcp_mgr.auto_configure_homeassistant_mcp()
+    print(f"   -> {mcp_msg}", flush=True)
 
     auth_ok, auth_msg = agy_cli.check_auth(timeout=5)
     print(f"🔐 Statut Google Antigravity : {auth_msg}", flush=True)

@@ -72,14 +72,17 @@
     btnSend: document.getElementById('btn-send'),
     activeModelHint: document.getElementById('active-model-hint'),
     topbarModelText: document.getElementById('topbar-model-text'),
-    topbarMcpBadge: document.getElementById('topbar-mcp-badge'),
+    btnTopbarMcp: document.getElementById('btn-topbar-mcp'),
+    topbarMcpDot: document.getElementById('topbar-mcp-dot'),
     topbarMcpText: document.getElementById('topbar-mcp-text'),
     btnOpenAuth: document.getElementById('btn-open-auth'),
     topbarAuthDot: document.getElementById('topbar-auth-dot'),
     topbarAuthLabel: document.getElementById('topbar-auth-label'),
     drawerAuthDot: document.getElementById('drawer-auth-dot'),
     drawerAuthText: document.getElementById('drawer-auth-text'),
-    drawerMcpBadge: document.getElementById('drawer-mcp-badge'),
+    btnDrawerMcp: document.getElementById('btn-drawer-mcp'),
+    drawerMcpDot: document.getElementById('drawer-mcp-dot'),
+    drawerMcpText: document.getElementById('drawer-mcp-text'),
     btnOpenSettings: document.getElementById('btn-open-settings'),
     btnOpenSettingsDrawer: document.getElementById('btn-open-settings-drawer'),
     settingsModal: document.getElementById('settings-modal'),
@@ -93,7 +96,14 @@
     btnCheckAuth: document.getElementById('btn-check-auth'),
     authModalBadge: document.getElementById('auth-modal-badge'),
     authModalDesc: document.getElementById('auth-modal-desc'),
-    btnRefreshMcp: document.getElementById('btn-refresh-mcp'),
+    btnConnectMcp: document.getElementById('btn-connect-mcp'),
+    btnConnectMcpText: document.getElementById('btn-connect-mcp-text'),
+    inputMcpUrl: document.getElementById('input-mcp-url'),
+    inputMcpToken: document.getElementById('input-mcp-token'),
+    mcpStatusBadge: document.getElementById('mcp-status-badge'),
+    mcpStatusDesc: document.getElementById('mcp-status-desc'),
+    mcpFeedbackBanner: document.getElementById('mcp-feedback-banner'),
+    mcpToolsCountBadge: document.getElementById('mcp-tools-count-badge'),
     mcpServersList: document.getElementById('mcp-servers-list'),
   };
 
@@ -583,6 +593,12 @@
     if (el.btnOpenAuth) {
       el.btnOpenAuth.addEventListener('click', () => openSettings('tab-auth'));
     }
+    if (el.btnTopbarMcp) {
+      el.btnTopbarMcp.addEventListener('click', () => openSettings('tab-mcp'));
+    }
+    if (el.btnDrawerMcp) {
+      el.btnDrawerMcp.addEventListener('click', () => openSettings('tab-mcp'));
+    }
     el.btnCloseModal.addEventListener('click', closeSettings);
     el.settingsModal.addEventListener('click', (e) => {
       if (e.target === el.settingsModal) closeSettings();
@@ -632,21 +648,59 @@
       });
     }
 
-    // Refresh MCP button
-    el.btnRefreshMcp.addEventListener('click', async () => {
-      try {
-        el.btnRefreshMcp.disabled = true;
-        el.btnRefreshMcp.textContent = 'Reconnexion...';
-        const res = await apiCall('/api/mcp/setup', { method: 'POST', body: '{}' });
-        alert(res.message || 'Serveur MCP reconfiguré avec succès.');
-        await loadMcpServers();
-      } catch (err) {
-        alert(`Erreur MCP : ${err.message}`);
-      } finally {
-        el.btnRefreshMcp.disabled = false;
-        el.btnRefreshMcp.textContent = '🔄 Reconnecter MCP';
+    // Connect / Reconnect MCP button
+    if (el.btnConnectMcp) {
+      el.btnConnectMcp.addEventListener('click', handleConnectMcp);
+    }
+  }
+
+  async function handleConnectMcp() {
+    if (!el.btnConnectMcp) return;
+    try {
+      el.btnConnectMcp.disabled = true;
+      if (el.btnConnectMcpText) el.btnConnectMcpText.textContent = 'Connexion en cours...';
+      if (el.mcpFeedbackBanner) el.mcpFeedbackBanner.style.display = 'none';
+
+      const customToken = el.inputMcpToken ? el.inputMcpToken.value.trim() : '';
+      const customUrl = el.inputMcpUrl ? el.inputMcpUrl.value.trim() : '';
+
+      const payload = {};
+      if (customToken) payload.token = customToken;
+      if (customUrl) payload.url = customUrl;
+
+      const res = await apiCall('/api/mcp/setup', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      if (el.mcpFeedbackBanner) {
+        el.mcpFeedbackBanner.style.display = 'block';
+        if (res.success) {
+          el.mcpFeedbackBanner.style.background = 'rgba(16, 185, 129, 0.15)';
+          el.mcpFeedbackBanner.style.border = '1px solid rgba(16, 185, 129, 0.4)';
+          el.mcpFeedbackBanner.style.color = '#34d399';
+          el.mcpFeedbackBanner.textContent = '✅ ' + (res.message || 'Serveur MCP Home Assistant connecté avec succès.');
+        } else {
+          el.mcpFeedbackBanner.style.background = 'rgba(239, 68, 68, 0.15)';
+          el.mcpFeedbackBanner.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+          el.mcpFeedbackBanner.style.color = '#f87171';
+          el.mcpFeedbackBanner.textContent = '❌ ' + (res.message || 'Échec de configuration du serveur MCP.');
+        }
       }
-    });
+
+      await loadMcpServers();
+    } catch (err) {
+      if (el.mcpFeedbackBanner) {
+        el.mcpFeedbackBanner.style.display = 'block';
+        el.mcpFeedbackBanner.style.background = 'rgba(239, 68, 68, 0.15)';
+        el.mcpFeedbackBanner.style.border = '1px solid rgba(239, 68, 68, 0.4)';
+        el.mcpFeedbackBanner.style.color = '#f87171';
+        el.mcpFeedbackBanner.textContent = '❌ Erreur MCP : ' + err.message;
+      }
+    } finally {
+      el.btnConnectMcp.disabled = false;
+      if (el.btnConnectMcpText) el.btnConnectMcpText.textContent = 'Connecter / Reconnecter MCP';
+    }
   }
 
   function openSettings(activeTabId = null) {
@@ -712,27 +766,69 @@
       state.mcpServers = data.servers || [];
 
       const count = state.mcpServers.length;
-      el.topbarMcpText.textContent = count > 0 ? `${count} Outils MCP` : 'MCP Actif';
-      el.drawerMcpBadge.textContent = `🔌 ${count || 'HA'} Outils`;
+      const isConnected = count > 0;
 
-      if (count === 0) {
-        el.mcpServersList.innerHTML = `
-          <div style="color: var(--text-muted); font-size: 12px; padding: 6px 0;">
-            Serveur ha-mcp connecté automatiquement avec le jeton Supervisor.
-          </div>
-        `;
+      // Topbar button & badge
+      if (el.btnTopbarMcp) {
+        if (isConnected) {
+          el.btnTopbarMcp.classList.add('highlight');
+        } else {
+          el.btnTopbarMcp.classList.remove('highlight');
+        }
+      }
+      if (el.topbarMcpDot) {
+        el.topbarMcpDot.className = `status-indicator ${isConnected ? 'online' : 'offline'}`;
+      }
+      if (el.topbarMcpText) {
+        el.topbarMcpText.textContent = isConnected ? '82 Outils MCP' : 'Connecter MCP';
+      }
+
+      // Drawer badge
+      if (el.drawerMcpDot) {
+        el.drawerMcpDot.className = `status-indicator ${isConnected ? 'online' : 'offline'}`;
+      }
+      if (el.drawerMcpText) {
+        el.drawerMcpText.textContent = isConnected ? 'MCP Actif' : 'MCP Inactif';
+      }
+
+      // Modal Status
+      if (el.mcpStatusBadge) {
+        el.mcpStatusBadge.className = `auth-status-tag ${isConnected ? 'ok' : 'ko'}`;
+        el.mcpStatusBadge.textContent = isConnected ? 'Connecté & Opérationnel' : 'Non connecté';
+      }
+      if (el.mcpToolsCountBadge) {
+        el.mcpToolsCountBadge.textContent = isConnected ? `${count} serveur(s) • ~82 outils` : '0 outil actif';
+      }
+      if (el.mcpStatusDesc) {
+        el.mcpStatusDesc.textContent = isConnected
+          ? 'Le serveur ha-mcp est opérationnel. Chassitant a un accès complet aux outils de contrôle, lecture des états et configuration de Home Assistant.'
+          : 'Le serveur MCP n\'est pas encore connecté. Cliquez sur le bouton "Connecter / Reconnecter MCP" pour activer le contrôle de votre domotique.';
+      }
+
+      if (!isConnected) {
+        if (el.mcpServersList) {
+          el.mcpServersList.innerHTML = `
+            <div style="color: var(--text-muted); font-size: 12px; padding: 10px 0; text-align: center;">
+              ⚠️ Aucun serveur MCP actif. Cliquez sur <strong>Connecter MCP</strong> ci-dessus pour initialiser la liaison.
+            </div>
+          `;
+        }
         return;
       }
 
-      el.mcpServersList.innerHTML = state.mcpServers.map((srv) => `
-        <div class="mcp-item">
-          <div class="mcp-item-info">
-            <span class="mcp-name">⚡ ${escapeHtml(srv.name || 'homeassistant')}</span>
-            <span class="mcp-desc">${escapeHtml(srv.command || 'ha-mcp stdio')}</span>
+      if (el.mcpServersList) {
+        el.mcpServersList.innerHTML = state.mcpServers.map((srv) => `
+          <div class="mcp-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:var(--bg-secondary); border-radius:var(--radius-sm); border:1px solid var(--border-color);">
+            <div class="mcp-item-info">
+              <span class="mcp-name" style="font-weight:600; font-size:13px; color:var(--text-primary); display:block;">⚡ ${escapeHtml(srv.name || 'homeassistant')}</span>
+              <span class="mcp-desc" style="font-size:11.5px; color:var(--text-muted);">
+                ${escapeHtml(srv.command || 'ha-mcp stdio')} • ${escapeHtml(srv.url || 'http://supervisor/core')}
+              </span>
+            </div>
+            <span class="auth-status-tag ok" style="font-size:11px;">~82 Outils Actifs</span>
           </div>
-          <span class="auth-status-tag ok">Actif</span>
-        </div>
-      `).join('');
+        `).join('');
+      }
     } catch (err) {
       console.error('Failed to load MCP servers:', err);
     }

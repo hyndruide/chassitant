@@ -47,7 +47,10 @@
             <span id="drawer-auth-dot" class="status-indicator offline"></span>
             <span id="drawer-auth-text">Google Auth...</span>
           </span>
-          <span id="drawer-mcp-badge" style="opacity: 0.8; font-weight: 600;">🔌 MCP</span>
+          <button id="btn-drawer-mcp" class="btn-drawer-mcp" title="Gérer la connexion MCP">
+            <span id="drawer-mcp-dot" class="status-indicator offline" style="margin: 0;"></span>
+            <span id="drawer-mcp-text">MCP</span>
+          </button>
         </div>
         <button id="btn-open-settings-drawer" class="btn-footer">
           <span>⚙️</span>
@@ -74,10 +77,10 @@
             <span id="topbar-auth-dot" class="status-indicator offline" style="margin: 0;"></span>
             <span id="topbar-auth-label">Google Auth</span>
           </button>
-          <div id="topbar-mcp-badge" class="badge-tag highlight" title="Statut du serveur MCP Home Assistant">
-            <span>🔌</span>
-            <span id="topbar-mcp-text">MCP HA Actif</span>
-          </div>
+          <button id="btn-topbar-mcp" class="badge-tag highlight" style="cursor: pointer;" title="Statut et connexion au serveur MCP Home Assistant">
+            <span id="topbar-mcp-dot" class="status-indicator offline" style="margin: 0;"></span>
+            <span id="topbar-mcp-text">Connecter MCP</span>
+          </button>
           <div id="topbar-model-badge" class="badge-tag desktop-only" title="Modèle IA actif">
             <span>✨</span>
             <span id="topbar-model-text">Gemini 3.8 Flash</span>
@@ -209,17 +212,54 @@
 
         <!-- Tab 2: MCP Tools -->
         <div id="tab-mcp" class="tab-pane">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <p class="form-help" style="margin: 0;">
-              Le serveur <strong>ha-mcp</strong> est pré-embarqué et connecté automatiquement via le jeton Supervisor de Home Assistant.
+          <div class="auth-card" style="margin-bottom: 12px;">
+            <div class="auth-header">
+              <strong style="display:flex; align-items:center; gap:6px;">
+                <span>🔌</span> Serveur MCP Home Assistant (ha-mcp)
+              </strong>
+              <span id="mcp-status-badge" class="auth-status-tag ko">Vérification...</span>
+            </div>
+            <p id="mcp-status-desc" class="form-help">
+              Le protocole MCP permet à Chassitant d'interagir directement avec Home Assistant : piloter vos appareils, consulter vos capteurs et gérer votre domotique en toute autonomie.
             </p>
-            <button id="btn-refresh-mcp" class="btn-secondary" style="font-size: 12px; padding: 4px 8px;">
-              🔄 Reconnecter MCP
+          </div>
+
+          <!-- Feedback message banner -->
+          <div id="mcp-feedback-banner" style="display: none; padding: 10px 14px; border-radius: var(--radius-md); font-size: 13px; margin-bottom: 14px;"></div>
+
+          <!-- Main Action Connect Button -->
+          <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+            <button id="btn-connect-mcp" class="btn-primary" style="flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px;">
+              <span>🔌</span>
+              <span id="btn-connect-mcp-text">Connecter / Reconnecter MCP</span>
             </button>
           </div>
-          <div id="mcp-server-status" class="auth-card">
-            <strong>Serveurs MCP Actifs</strong>
-            <div id="mcp-servers-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+
+          <!-- Advanced / Manual Token & URL settings -->
+          <details style="margin-bottom: 16px; background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 10px 12px;">
+            <summary style="cursor: pointer; font-size: 13px; font-weight: 600; color: var(--text-secondary);">
+              ⚙️ Paramètres avancés (Jeton LLAT & URL manuelle)
+            </summary>
+            <div style="margin-top: 12px; display: flex; flex-direction: column; gap: 10px;">
+              <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 12px;">URL de Home Assistant Core</label>
+                <input type="text" id="input-mcp-url" class="form-input" value="http://supervisor/core" placeholder="http://supervisor/core" />
+                <span class="form-help" style="font-size: 11px;">Sous Home Assistant OS, l'URL par défaut est <code>http://supervisor/core</code>.</span>
+              </div>
+              <div class="form-group" style="margin: 0;">
+                <label class="form-label" style="font-size: 12px;">Jeton d'accès longue durée (LLAT — Optionnel si Supervisor)</label>
+                <input type="password" id="input-mcp-token" class="form-input" placeholder="Laisser vide pour détection automatique du Supervisor" />
+                <span class="form-help" style="font-size: 11px;">Détecté automatiquement sous Home Assistant OS. Si nécessaire, générez un jeton dans : Profil > Jetons d'accès longue durée.</span>
+              </div>
+            </div>
+          </details>
+
+          <div class="auth-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <strong>Outils & Intégrations Actifs</strong>
+              <span id="mcp-tools-count-badge" style="font-size: 12px; color: var(--text-muted);">0 outil</span>
+            </div>
+            <div id="mcp-servers-list" style="display: flex; flex-direction: column; gap: 8px;">
               Chargement des outils...
             </div>
           </div>
@@ -258,7 +298,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Chassitant v1.3.0</h3>
+            <h3>Chassitant v1.3.4</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>
