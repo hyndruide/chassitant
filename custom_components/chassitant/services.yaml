@@ -1,0 +1,49 @@
+ask:
+  name: Poser une question à agy
+  description: Envoie un prompt à Antigravity CLI (agy) et retourne la réponse générée.
+  fields:
+    prompt:
+      name: Prompt
+      description: Le texte ou la commande à envoyer à l'assistant.
+      required: true
+      example: "Vérifie les lumières allumées et donne-moi un résumé."
+      selector:
+        text:
+          multiline: true
+    conversation_id:
+      name: Identifiant de conversation
+      description: ID de fil de discussion pour maintenir le contexte entre plusieurs requêtes.
+      required: false
+      example: "36b04ec9-aabe-46f4-bbdf-aadfbc6282e2"
+      selector:
+        text:
+    model:
+      name: Modèle
+      description: Modèle à utiliser pour cette requête (optionnel).
+      required: false
+      example: "gemini-3.8-flash-high"
+      selector:
+        text:
+    effort:
+      name: Effort de réflexion
+      description: Niveau de raisonnement de l'agent.
+      required: false
+      selector:
+        select:
+          options:
+            - low
+            - medium
+            - high
+            - xhigh
+            - max
+
+clear_conversation:
+  name: Réinitialiser une conversation
+  description: Réinitialise le contexte d'une conversation spécifique.
+  fields:
+    conversation_id:
+      name: Identifiant de conversation
+      description: ID du fil à réinitialiser.
+      required: false
+      selector:
+        text:

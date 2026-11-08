@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Chassitant Bridge (agy)",
+        "description": "Enter the connection details for the machine running the Chassitant Bridge.",
+        "data": {
+          "host": "Host / IP Address",
+          "port": "Port",
+          "api_key": "API Key / Token"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Chassitant Bridge. Ensure the server is running on the target machine.",
+      "invalid_auth": "Invalid API key / token. Please check your token.",
+      "agy_not_authenticated": "The agy CLI on the target machine is not authenticated with Google. Please log in on the host machine.",
+      "unknown": "An unexpected error occurred."
+    },
+    "abort": {
+      "already_configured": "This Chassitant instance is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Chassitant Options",
+        "description": "Configure agent parameters for Antigravity agy.",
+        "data": {
+          "model": "Model (default, gemini-3.8-flash-high, etc.)",
+          "effort": "Reasoning effort",
+          "prompt": "System instructions / prompt",
+          "timeout": "Timeout (seconds)",
+          "dangerously_skip_permissions": "Auto-approve tool permissions (recommended)"
+        }
+      }
+    }
+  }
+}

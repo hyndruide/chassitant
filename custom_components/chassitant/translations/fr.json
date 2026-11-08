@@ -1,0 +1,39 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connexion à Chassitant Bridge (agy)",
+        "description": "Indiquez les coordonnées de la machine où s'exécute le Bridge Chassitant.",
+        "data": {
+          "host": "Adresse IP / Hôte",
+          "port": "Port",
+          "api_key": "Jeton d'authentification (Clé API)"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Impossible de contacter le Bridge Chassitant. Vérifiez que le script start_bridge est bien lancé sur votre machine.",
+      "invalid_auth": "Jeton d'authentification invalide. Vérifiez la clé affichée dans la console du Bridge.",
+      "agy_not_authenticated": "Le CLI agy sur la machine distante n'est pas encore connecté à votre compte Google. Lancez la connexion depuis la console.",
+      "unknown": "Une erreur inattendue est survenue."
+    },
+    "abort": {
+      "already_configured": "Cette instance Chassitant est déjà configurée."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Options de Chassitant",
+        "description": "Personnalisez le comportement de l'assistant IA.",
+        "data": {
+          "model": "Modèle (default, gemini-3.8-flash-high, claude-sonnet-4-6, etc.)",
+          "effort": "Effort de raisonnement",
+          "prompt": "Consignes système / Prompt",
+          "timeout": "Délai d'attente max (secondes)",
+          "dangerously_skip_permissions": "Autoriser automatiquement l'utilisation des outils MCP (recommandé)"
+        }
+      }
+    }
+  }
+}

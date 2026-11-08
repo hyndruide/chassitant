@@ -1,0 +1,29 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Local configuration & credentials
+chassitant_config.json
+.env
+*.token
+*.key
+
+# Logs
+*.log
+logs/
+
+# Python virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Home Assistant test data
+.storage/
+home-assistant.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
