@@ -278,7 +278,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
 
             model = payload.get("model")
             effort = payload.get("effort")
-            timeout = int(payload.get("timeout", 120))
+            timeout = int(payload.get("timeout", 300))
 
             logger.info("Executing agy turn for conversation %s: '%s...'", conv_id, prompt[:40])
             result = self.agy_client.process(
@@ -342,7 +342,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             conv_id = payload.get("conversation_id")
             model = payload.get("model")
             effort = payload.get("effort")
-            timeout = int(payload.get("timeout", 120))
+            timeout = int(payload.get("timeout", 300))
 
             res = self.agy_client.process(
                 prompt=prompt,

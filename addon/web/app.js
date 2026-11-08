@@ -48,7 +48,7 @@
     settings: {
       model: localStorage.getItem('chassitant_model') || 'default',
       effort: localStorage.getItem('chassitant_effort') || 'high',
-      timeout: parseInt(localStorage.getItem('chassitant_timeout') || '120', 10),
+      timeout: parseInt(localStorage.getItem('chassitant_timeout') || '300', 10),
     },
     authStatus: { authenticated: false, message: '' },
     mcpServers: [],

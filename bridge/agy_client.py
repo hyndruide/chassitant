@@ -223,14 +223,15 @@ class AgyClient:
         if dangerously_skip_permissions:
             cmd.append("--dangerously-skip-permissions")
 
-        if timeout > 0:
-            cmd.extend(["--print-timeout", f"{timeout}s"])
+        # Set 0s so agy waits until completion without premature turn cutoff
+        cmd.extend(["--print-timeout", "0s"])
 
-        logger.info("Executing agy prompt (timeout=%ds)...", timeout)
+        effective_timeout = max(timeout, 300) if timeout > 0 else 300
+        logger.info("Executing agy prompt (timeout=%ds)...", effective_timeout)
 
         try:
-            # We add a buffer of 15 seconds over print-timeout for process startup/cleanup
-            exec_timeout = timeout + 15 if timeout > 0 else None
+            # Subprocess execution timeout with safety margin
+            exec_timeout = effective_timeout + 60
             res = subprocess.run(
                 cmd,
                 capture_output=True,
