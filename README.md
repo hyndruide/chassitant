@@ -1,8 +1,25 @@
 # 🌟 Chassitant — Module Assist Antigravity (`agy`) pour Home Assistant
 
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
+[![GitHub Release](https://img.shields.io/github/v/release/hyndruide/chassitant)](https://github.com/hyndruide/chassitant/releases)
+
 **Chassitant** intègre **Google Antigravity CLI (`agy`)** directement comme moteur de conversation intelligent (**Assist**) dans **Home Assistant**.
 
 Il permet de piloter votre maison, de poser des questions complexes, de consulter l'état de vos entités et d'exécuter des requêtes à la voix ou par écrit grâce à la puissance d'Antigravity.
+
+---
+
+## 📥 Installation en 1 clic via HACS (Recommandé)
+
+Votre Home Assistant dispose de **HACS** ? L'installation se fait directement depuis l'interface :
+
+1. Dans Home Assistant, ouvrez **HACS** > **Intégrations**.
+2. Cliquez sur les **3 petits points** en haut à droite > **Dépôts personnalisés** (*Custom repositories*).
+3. Ajoutez l'URL suivante :
+   - **Dépôt** : `https://github.com/hyndruide/chassitant`
+   - **Type** : `Intégration`
+4. Cliquez sur **Ajouter**, puis recherchez **Chassitant** et cliquez sur **Télécharger**.
+5. Redémarrez **Home Assistant**.
 
 ---
 

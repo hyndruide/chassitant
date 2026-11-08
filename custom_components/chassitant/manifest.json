@@ -1,12 +1,12 @@
 {
   "domain": "chassitant",
   "name": "Chassitant (Antigravity agy)",
-  "codeowners": ["@chassitant"],
+  "codeowners": ["@hyndruide"],
   "config_flow": true,
-  "documentation": "https://github.com/chassitant/chassitant",
+  "documentation": "https://github.com/hyndruide/chassitant",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/chassitant/chassitant/issues",
+  "issue_tracker": "https://github.com/hyndruide/chassitant/issues",
   "requirements": [],
   "version": "1.0.0"
 }
