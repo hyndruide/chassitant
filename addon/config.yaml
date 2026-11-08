@@ -1,13 +1,13 @@
 name: "Chassitant (Antigravity agy)"
 slug: "chassitant_agy"
 description: "Exécute Google Antigravity CLI (agy) directement sur Home Assistant 24/7 avec terminal Ingress."
-version: "1.0.0"
+version: "1.0.1"
 startup: application
 boot: auto
 init: false
 arch:
-  - amd64
   - aarch64
+  - amd64
 ingress: true
 ingress_port: 8098
 panel_icon: mdi:robot-excited
