@@ -19,6 +19,15 @@ class AgyClient:
         self.binary_path = binary_path or self.find_binary()
         logger.info("Using agy binary at: %s", self.binary_path)
 
+        app_dir = os.environ.get("CHASSITANT_APP_DIR")
+        if not app_dir or not os.path.isdir(app_dir):
+            if os.path.isdir("/app"):
+                app_dir = "/app"
+            else:
+                app_dir = str(Path(__file__).resolve().parent.parent)
+        self.work_dir = app_dir
+        logger.info("Using agy work_dir at: %s", self.work_dir)
+
     @classmethod
     def find_binary(cls) -> Optional[str]:
         """Locate agy executable on the system."""
@@ -217,8 +226,10 @@ class AgyClient:
         if model and model != "default":
             cmd.extend(["--model", model])
 
-        if effort:
-            cmd.extend(["--effort", effort])
+        eff = (effort or "").strip().lower()
+        if not eff or eff == "default":
+            eff = "low"
+        cmd.extend(["--effort", eff])
 
         if dangerously_skip_permissions:
             cmd.append("--dangerously-skip-permissions")
@@ -227,7 +238,7 @@ class AgyClient:
         cmd.extend(["--print-timeout", "0s"])
 
         effective_timeout = max(timeout, 300) if timeout > 0 else 300
-        logger.info("Executing agy prompt (timeout=%ds)...", effective_timeout)
+        logger.info("Executing agy prompt (effort=%s, timeout=%ds)...", eff, effective_timeout)
 
         try:
             # Subprocess execution timeout with safety margin
@@ -240,6 +251,7 @@ class AgyClient:
                 check=False,
                 encoding="utf-8",
                 errors="replace",
+                cwd=self.work_dir,
             )
 
             stdout = res.stdout.strip()
@@ -336,13 +348,17 @@ class AgyClient:
             cmd.extend(["--conversation", conversation_id])
         if model and model != "default":
             cmd.extend(["--model", model])
-        if effort:
-            cmd.extend(["--effort", effort])
+
+        eff = (effort or "").strip().lower()
+        if not eff or eff == "default":
+            eff = "low"
+        cmd.extend(["--effort", eff])
+
         if dangerously_skip_permissions:
             cmd.append("--dangerously-skip-permissions")
         cmd.extend(["--print-timeout", "0s"])
 
-        logger.info("Starting agy stream turn: '%s...'", prompt[:50])
+        logger.info("Starting agy stream turn (effort=%s): '%s...'", eff, prompt[:50])
         yield {
             "type": "status",
             "message": "Connexion à Gemini en cours...",
@@ -357,6 +373,7 @@ class AgyClient:
                 encoding="utf-8",
                 errors="replace",
                 bufsize=1,
+                cwd=self.work_dir,
             )
 
             full_response: List[str] = []
@@ -453,3 +470,14 @@ class AgyClient:
         except Exception as err:
             logger.exception("Stream execution error: %s", err)
             yield {"type": "error", "error": str(err)}
+
+    def compact_conversation(self, conversation_id: str, timeout: int = 60) -> Dict[str, Any]:
+        """
+        Run context compaction on a conversation to trim historical tokens and keep it snappy.
+        """
+        return self.process(
+            prompt="/compact",
+            conversation_id=conversation_id,
+            effort="low",
+            timeout=timeout,
+        )

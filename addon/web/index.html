@@ -73,6 +73,12 @@
         </div>
 
         <div class="topbar-right">
+          <button id="btn-effort-toggle" class="badge-tag" style="cursor: pointer;" title="Niveau de réflexion de l'IA (cliquer pour changer : Rapide / Équilibré / Approfondi)">
+            <span id="effort-toggle-text">⚡ Rapide</span>
+          </button>
+          <button id="btn-compact-conv" class="btn-topbar-action" style="font-size: 13px;" title="Compacter le contexte de cette conversation pour accélérer les réponses">
+            🧹
+          </button>
           <button id="btn-open-auth" class="badge-tag" style="cursor: pointer; background: transparent; border: 1px solid var(--border-color);" title="Connexion Google">
             <span id="topbar-auth-dot" class="status-indicator offline" style="margin: 0;"></span>
             <span id="topbar-auth-label">Google Auth</span>
@@ -281,9 +287,9 @@
           <div class="form-group">
             <label class="form-label">Effort de raisonnement (Reasoning effort)</label>
             <select id="select-effort" class="form-select">
-              <option value="high" selected>High (Élevé — Recommandé pour MCP)</option>
-              <option value="medium">Medium (Moyen)</option>
-              <option value="low">Low (Faible / Rapide)</option>
+              <option value="low" selected>⚡ Low (Faible / Ultra-rapide — Recommandé)</option>
+              <option value="medium">⚖️ Medium (Moyen / Équilibré)</option>
+              <option value="high">🧠 High (Élevé — Réflexion approfondie)</option>
               <option value="max">Max (Raisonnement maximal)</option>
             </select>
           </div>
@@ -298,7 +304,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Chassitant v1.3.6</h3>
+            <h3>Chassitant v1.3.7</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

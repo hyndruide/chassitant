@@ -42,6 +42,8 @@ COPY bridge/ /app/bridge/
 COPY web/ /app/web/
 COPY run.sh /app/run.sh
 COPY onboarding.sh /app/onboarding.sh
+COPY GEMINI.md /app/GEMINI.md
+COPY .agents/ /app/.agents/
 
 RUN chmod +x /app/run.sh /app/onboarding.sh
 

@@ -47,7 +47,7 @@
     isThinking: false,
     settings: {
       model: localStorage.getItem('chassitant_model') || 'default',
-      effort: localStorage.getItem('chassitant_effort') || 'high',
+      effort: localStorage.getItem('chassitant_effort') || 'low',
       timeout: parseInt(localStorage.getItem('chassitant_timeout') || '300', 10),
     },
     authStatus: { authenticated: false, message: '' },
@@ -75,6 +75,9 @@
     btnTopbarMcp: document.getElementById('btn-topbar-mcp'),
     topbarMcpDot: document.getElementById('topbar-mcp-dot'),
     topbarMcpText: document.getElementById('topbar-mcp-text'),
+    btnEffortToggle: document.getElementById('btn-effort-toggle'),
+    effortToggleText: document.getElementById('effort-toggle-text'),
+    btnCompactConv: document.getElementById('btn-compact-conv'),
     btnOpenAuth: document.getElementById('btn-open-auth'),
     topbarAuthDot: document.getElementById('topbar-auth-dot'),
     topbarAuthLabel: document.getElementById('topbar-auth-label'),
@@ -1278,6 +1281,19 @@
     }
   }
 
+  function updateEffortBadge() {
+    if (!el.effortToggleText) return;
+    const effortLabels = {
+      'low': '⚡ Rapide',
+      'medium': '⚖️ Équilibré',
+      'high': '🧠 Approfondi',
+      'max': '💥 Max',
+    };
+    const eff = state.settings.effort || 'low';
+    el.effortToggleText.textContent = effortLabels[eff] || '⚡ Rapide';
+    if (el.selectEffort) el.selectEffort.value = eff;
+  }
+
   function updateModelBadges() {
     const modelLabels = {
       'default': 'Gemini 3.8 Flash',
@@ -1289,6 +1305,7 @@
     const label = modelLabels[state.settings.model] || state.settings.model;
     el.topbarModelText.textContent = label;
     el.activeModelHint.textContent = `Modèle : ${label}`;
+    updateEffortBadge();
   }
 
   // ==========================================================================
@@ -1324,6 +1341,50 @@
     });
 
     el.btnSend.addEventListener('click', sendMessage);
+
+    // Effort quick toggle button
+    if (el.btnEffortToggle) {
+      el.btnEffortToggle.addEventListener('click', () => {
+        const order = ['low', 'medium', 'high'];
+        const currentIdx = order.indexOf(state.settings.effort);
+        const nextEffort = order[(currentIdx + 1) % order.length];
+        state.settings.effort = nextEffort;
+        localStorage.setItem('chassitant_effort', nextEffort);
+        updateEffortBadge();
+      });
+    }
+
+    // Context compaction button
+    if (el.btnCompactConv) {
+      el.btnCompactConv.addEventListener('click', async () => {
+        if (!state.activeConvId) {
+          alert('Veuillez sélectionner ou démarrer une conversation d\'abord.');
+          return;
+        }
+        const confirmed = confirm('Voulez-vous compacter cette conversation pour alléger l\'historique et accélérer les réponses de Gemini ?');
+        if (!confirmed) return;
+
+        const originalText = el.btnCompactConv.textContent;
+        el.btnCompactConv.disabled = true;
+        el.btnCompactConv.textContent = '⏳';
+
+        try {
+          const res = await apiCall(`/api/conversations/${state.activeConvId}/compact`, {
+            method: 'POST',
+          });
+          if (res.success) {
+            alert('✅ Contexte de la conversation compacté avec succès ! Les futurs échanges seront beaucoup plus rapides.');
+          } else {
+            alert('ℹ️ ' + (res.response || 'Compactage effectué.'));
+          }
+        } catch (err) {
+          alert('❌ Erreur lors du compactage : ' + err.message);
+        } finally {
+          el.btnCompactConv.disabled = false;
+          el.btnCompactConv.textContent = originalText;
+        }
+      });
+    }
 
     // Suggestion chips
     document.querySelectorAll('.suggestion-chip').forEach((btn) => {

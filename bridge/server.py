@@ -358,7 +358,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.1.0",
+                    "version": "1.3.7",
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
                     "agy_authenticated": auth_ok,
@@ -501,6 +501,24 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
 
             # Stream live events to this client (turn continues in background if client leaves)
             self.stream_turn_sse(turn)
+            return
+
+        # Compact conversation context
+        if path.startswith("/api/conversations/") and path.endswith("/compact"):
+            if not self.check_authorization():
+                return
+            conv_id = path.replace("/api/conversations/", "").replace("/compact", "").strip()
+            logger.info("Triggering context compaction for conversation %s", conv_id)
+            result = self.agy_client.compact_conversation(conversation_id=conv_id, timeout=90)
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": result.get("success", False),
+                    "status": result.get("status"),
+                    "response": result.get("response", "Conversation compactée avec succès."),
+                    "tokens": result.get("usage", {}).get("total_tokens"),
+                },
+            )
             return
 
         # 3. Auto-configure MCP with Home Assistant

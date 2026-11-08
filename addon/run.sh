@@ -31,6 +31,16 @@ if [ ! -L /root/.gemini ]; then
     ln -sfn /data/.gemini /root/.gemini
 fi
 
+# Ensure GEMINI.md and skills are available in both /app and ~/.gemini/antigravity-cli/skills
+mkdir -p /root/.gemini/antigravity-cli/skills
+if [ -d /app/.agents/skills ]; then
+    cp -rn /app/.agents/skills/* /root/.gemini/antigravity-cli/skills/ 2>/dev/null || true
+fi
+if [ -f /app/GEMINI.md ]; then
+    cp -f /app/GEMINI.md /root/GEMINI.md 2>/dev/null || true
+    cp -f /app/GEMINI.md /data/GEMINI.md 2>/dev/null || true
+fi
+
 export HOME="/root"
 export PATH="/usr/local/bin:/root/.local/bin:/root/bin:$PATH"
 export CHASSITANT_DATA_DIR="/data"
