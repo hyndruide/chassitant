@@ -1,4 +1,4 @@
-ARG BUILD_FROM
+ARG BUILD_FROM=ghcr.io/home-assistant/aarch64-base-debian:bookworm
 FROM ${BUILD_FROM}
 
 # Set shell
@@ -28,8 +28,8 @@ WORKDIR /app
 
 # Copy application files
 COPY bridge/ /app/bridge/
-COPY addon/run.sh /app/run.sh
-COPY addon/onboarding.sh /app/onboarding.sh
+COPY run.sh /app/run.sh
+COPY onboarding.sh /app/onboarding.sh
 
 RUN chmod +x /app/run.sh /app/onboarding.sh
 
