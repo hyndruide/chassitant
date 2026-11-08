@@ -37,6 +37,9 @@ class ChassitantClient:
         timeout: int = 60,
     ) -> None:
         self.hass = hass
+        # Inside Home Assistant OS, localhost points to HA Core container; replace with addon hostname
+        if host in ("localhost", "127.0.0.1"):
+            host = "c211720a-chassitant-agy"
         self.host = host
         self.port = port
         self.api_key = api_key
@@ -116,27 +119,42 @@ class ChassitantClient:
         # Extra 15s network margin
         client_timeout = aiohttp.ClientTimeout(total=eff_timeout + 15)
 
-        try:
-            async with session.post(
-                url,
-                headers=self._headers,
-                json=payload,
-                timeout=client_timeout,
-            ) as response:
-                if response.status == 401:
-                    raise ChassitantAuthError("Jeton d'authentification invalide.")
+        # Try candidate endpoints (useful if config entry had localhost)
+        urls = [f"{self.base_url}/api/process"]
+        for fallback_host in ("c211720a-chassitant-agy", "localhost", "127.0.0.1"):
+            fb_url = f"http://{fallback_host}:{self.port}/api/process"
+            if fb_url not in urls:
+                urls.append(fb_url)
 
-                data = await response.json()
-                return data
+        last_err: Exception | None = None
+        for url in urls:
+            try:
+                async with session.post(
+                    url,
+                    headers=self._headers,
+                    json=payload,
+                    timeout=client_timeout,
+                ) as response:
+                    if response.status == 401:
+                        raise ChassitantAuthError("Jeton d'authentification invalide.")
 
-        except aiohttp.ClientConnectorError as err:
-            raise ChassitantConnectionError(
-                f"Impossible de contacter le Bridge Chassitant: {err}"
-            ) from err
-        except asyncio.TimeoutError as err:
-            raise ChassitantConnectionError(
-                f"Délai d'attente dépassé ({eff_timeout}s) pour la réponse d'agy."
-            ) from err
+                    data = await response.json()
+                    # Cache the working URL
+                    if "c211720a-chassitant-agy" in url:
+                        self.host = "c211720a-chassitant-agy"
+                        self.base_url = f"http://{self.host}:{self.port}"
+                    return data
+
+            except ChassitantAuthError:
+                raise
+            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                logger.debug("Failed contacting %s: %s, trying next candidate...", url, err)
+                last_err = err
+                continue
+
+        raise ChassitantConnectionError(
+            f"Impossible de contacter l'assistant agy ({last_err})"
+        )
 
     async def async_get_models(self) -> list[dict[str, str]]:
         """Fetch list of supported models from the bridge."""

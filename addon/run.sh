@@ -17,11 +17,16 @@ BRIDGE_PID=$!
 
 INGRESS_PORT="${INGRESS_PORT:-8098}"
 echo "[Chassitant] Démarrage du terminal Ingress sur le port ${INGRESS_PORT}..."
-ttyd -W -p "${INGRESS_PORT}" -t fontSize=15 -t theme='{"background": "#1e1e1e"}' /app/onboarding.sh &
+(
+    while true; do
+        ttyd -W -p "${INGRESS_PORT}" -t fontSize=15 -t theme='{"background": "#1e1e1e"}' /app/onboarding.sh || true
+        sleep 1
+    done
+) &
 TTYD_PID=$!
 
 # Trap signals for graceful shutdown
 trap "kill -TERM $BRIDGE_PID $TTYD_PID 2>/dev/null; exit 0" SIGTERM SIGINT
 
-# Keep script running
-wait -n $BRIDGE_PID $TTYD_PID
+# Keep script running as long as bridge server is alive
+wait $BRIDGE_PID

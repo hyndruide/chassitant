@@ -17,7 +17,7 @@ CONF_SKIP_PERMISSIONS: Final = "dangerously_skip_permissions"
 # Defaults
 DEFAULT_HOST: Final = "c211720a-chassitant-agy"
 DEFAULT_PORT: Final = 8099
-DEFAULT_TIMEOUT: Final = 60
+DEFAULT_TIMEOUT: Final = 120
 DEFAULT_MODEL: Final = "default"
 DEFAULT_EFFORT: Final = "high"
 DEFAULT_SKIP_PERMISSIONS: Final = True
