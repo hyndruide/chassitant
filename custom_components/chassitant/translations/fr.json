@@ -2,12 +2,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connexion à Chassitant Bridge (agy)",
-        "description": "Indiquez les coordonnées de la machine où s'exécute le Bridge Chassitant.",
+        "title": "Assistant Antigravity (agy)",
+        "description": "L'assistant fonctionne directement sur votre Home Assistant. Cliquez sur Valider pour l'activer.",
         "data": {
-          "host": "Adresse IP / Hôte",
+          "host": "Hôte",
           "port": "Port",
-          "api_key": "Jeton d'authentification (Clé API)"
+          "api_key": "Jeton d'authentification (Optionnel en local)"
         }
       }
     },

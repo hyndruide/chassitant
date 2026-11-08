@@ -2,12 +2,12 @@
   "config": {
     "step": {
       "user": {
-        "title": "Connect to Chassitant Bridge (agy)",
-        "description": "Enter the connection details for the machine running the Chassitant Bridge.",
+        "title": "Antigravity Assistant (agy)",
+        "description": "The assistant runs directly on your local Home Assistant. Click Submit to activate.",
         "data": {
-          "host": "Host / IP Address",
+          "host": "Host",
           "port": "Port",
-          "api_key": "API Key / Token"
+          "api_key": "API Key / Token (Optional for local)"
         }
       }
     },

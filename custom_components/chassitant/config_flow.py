@@ -81,7 +81,7 @@ class ChassitantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             {
                 vol.Required(CONF_HOST, default=DEFAULT_HOST): str,
                 vol.Required(CONF_PORT, default=DEFAULT_PORT): int,
-                vol.Required(CONF_API_KEY): selector.TextSelector(
+                vol.Optional(CONF_API_KEY, default=""): selector.TextSelector(
                     selector.TextSelectorConfig(
                         type=selector.TextSelectorType.PASSWORD
                     )
