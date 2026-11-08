@@ -14,8 +14,12 @@ class AuthManager:
 
     def __init__(self, config_dir: Optional[Path] = None) -> None:
         if config_dir is None:
-            # Default to root directory of project
-            config_dir = Path(__file__).resolve().parent.parent
+            # Check environment variable for custom data directory (e.g. Docker /data)
+            data_env = os.getenv("CHASSITANT_DATA_DIR")
+            if data_env and Path(data_env).is_dir():
+                config_dir = Path(data_env)
+            else:
+                config_dir = Path(__file__).resolve().parent.parent
 
         self.config_dir = config_dir
         self.config_path = self.config_dir / CONFIG_FILE_NAME

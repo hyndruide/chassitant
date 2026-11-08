@@ -1,0 +1,31 @@
+name: "Chassitant (Antigravity agy)"
+slug: "chassitant_agy"
+description: "Exécute Google Antigravity CLI (agy) directement sur Home Assistant 24/7 avec terminal Ingress."
+version: "1.0.0"
+startup: application
+boot: auto
+init: false
+arch:
+  - amd64
+  - aarch64
+ingress: true
+ingress_port: 8098
+panel_icon: mdi:robot-excited
+panel_title: "Chassitant agy"
+ports:
+  8099/tcp: 8099
+ports_description:
+  8099/tcp: "Port HTTP Bridge pour la communication avec Assist"
+map:
+  - config:rw
+  - share:rw
+options:
+  port: 8099
+  model: "default"
+  effort: "high"
+  dangerously_skip_permissions: true
+schema:
+  port: "int"
+  model: "str?"
+  effort: "list(low|medium|high|xhigh|max)?"
+  dangerously_skip_permissions: "bool?"
