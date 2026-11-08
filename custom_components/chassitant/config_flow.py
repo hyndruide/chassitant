@@ -70,6 +70,8 @@ class ChassitantConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 else:
                     errors["base"] = "cannot_connect"
             else:
+                host = client.host
+                user_input[CONF_HOST] = host
                 unique_id = f"chassitant_{host}_{port}"
                 await self.async_set_unique_id(unique_id)
                 self._abort_if_unique_id_configured()

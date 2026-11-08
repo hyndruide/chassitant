@@ -58,37 +58,37 @@ class ChassitantClient:
         Returns (success, message, data).
         """
         session = async_get_clientsession(self.hass)
-        url = f"{self.base_url}/api/auth/check"
 
-        try:
-            async with session.post(
-                url,
-                headers=self._headers,
-                timeout=aiohttp.ClientTimeout(total=15),
-            ) as response:
-                if response.status == 401:
-                    return False, "Jeton API invalide (Unauthorized)", {}
+        # Candidates to try if connecting from inside Home Assistant OS
+        candidate_hosts = [self.host]
+        if self.host in ("localhost", "127.0.0.1", "c211720a-chassitant-agy"):
+            for h in ("c211720a-chassitant-agy", "localhost", "127.0.0.1"):
+                if h not in candidate_hosts:
+                    candidate_hosts.append(h)
 
-                if response.status != 200:
-                    text = await response.text()
-                    return False, f"Code d'erreur HTTP {response.status}: {text}", {}
+        last_error = ""
+        for host in candidate_hosts:
+            url = f"http://{host}:{self.port}/api/auth/check"
+            try:
+                async with session.post(
+                    url,
+                    headers=self._headers,
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as response:
+                    if response.status == 401:
+                        return False, "Jeton API invalide (Unauthorized)", {}
 
-                data = await response.json()
-                if not data.get("agy_authenticated", False):
-                    return (
-                        False,
-                        "Le CLI agy n'est pas encore connecté à Google sur la machine hôte.",
-                        data,
-                    )
+                    if response.status == 200:
+                        data = await response.json()
+                        # Update working host and base_url
+                        self.host = host
+                        self.base_url = f"http://{host}:{self.port}"
+                        return True, "Connexion réussie !", data
+            except Exception as err:
+                last_error = str(err)
+                continue
 
-                return True, "Connexion réussie !", data
-
-        except aiohttp.ClientConnectorError as err:
-            return False, f"Impossible de joindre le Bridge sur {self.base_url}: {err}", {}
-        except asyncio.TimeoutError:
-            return False, f"Délai d'attente dépassé lors de la connexion à {self.base_url}", {}
-        except Exception as err:
-            return False, f"Erreur inattendue: {err}", {}
+        return False, f"Impossible de joindre l'Add-on Chassitant: {last_error}", {}
 
     async def async_process(
         self,

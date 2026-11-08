@@ -15,7 +15,7 @@ CONF_TIMEOUT: Final = "timeout"
 CONF_SKIP_PERMISSIONS: Final = "dangerously_skip_permissions"
 
 # Defaults
-DEFAULT_HOST: Final = "localhost"
+DEFAULT_HOST: Final = "c211720a-chassitant-agy"
 DEFAULT_PORT: Final = 8099
 DEFAULT_TIMEOUT: Final = 60
 DEFAULT_MODEL: Final = "default"
