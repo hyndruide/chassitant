@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Chassitant — Chatbot IA Home Assistant</title>
+  <link rel="stylesheet" href="libs/highlight-dark.min.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Backdrop for mobile drawer -->
+    <div id="drawer-backdrop" class="drawer-backdrop"></div>
+
+    <!-- Collapsible Drawer (Tiroir rétractable) -->
+    <aside id="drawer" class="drawer">
+      <div class="drawer-header">
+        <div class="drawer-brand">
+          <div class="brand-title">
+            <span class="brand-icon">🤖</span>
+            <span>Chassitant</span>
+          </div>
+        </div>
+        <button id="btn-new-chat" class="btn-new-chat" title="Créer une nouvelle discussion">
+          <span>+</span>
+          <span>Nouvelle conversation</span>
+        </button>
+      </div>
+
+      <div class="drawer-search">
+        <div class="search-input-wrapper">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="search-input" class="search-input" placeholder="Rechercher une discussion..." />
+        </div>
+      </div>
+
+      <div id="drawer-content" class="drawer-content">
+        <!-- Rendered chronologically by app.js -->
+        <div id="conv-list-placeholder" style="text-align: center; color: var(--text-muted); padding: 20px 0; font-size: 12px;">
+          Chargement des discussions...
+        </div>
+      </div>
+
+      <div class="drawer-footer">
+        <div class="footer-status-pill">
+          <span style="display:flex; align-items:center;">
+            <span id="drawer-auth-dot" class="status-indicator offline"></span>
+            <span id="drawer-auth-text">Google Auth...</span>
+          </span>
+          <span id="drawer-mcp-badge" style="opacity: 0.8; font-weight: 600;">🔌 MCP</span>
+        </div>
+        <button id="btn-open-settings-drawer" class="btn-footer">
+          <span>⚙️</span>
+          <span>Paramètres & Outils</span>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Chat Content -->
+    <main class="main-area">
+      <!-- Topbar with Drawer Hamburger Toggle & Active Conv Title -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="btn-hamburger" class="btn-hamburger" title="Afficher/Masquer le tiroir (☰)">
+            ☰
+          </button>
+          <div id="active-conv-title" class="active-conv-title" title="Cliquer pour renommer la conversation">
+            Nouvelle conversation
+          </div>
+        </div>
+
+        <div class="topbar-right">
+          <div id="topbar-mcp-badge" class="badge-tag highlight" title="Statut du serveur MCP Home Assistant">
+            <span>🔌</span>
+            <span id="topbar-mcp-text">MCP HA Actif</span>
+          </div>
+          <div id="topbar-model-badge" class="badge-tag desktop-only" title="Modèle IA actif">
+            <span>✨</span>
+            <span id="topbar-model-text">Gemini 3.8 Flash</span>
+          </div>
+          <button id="btn-open-settings" class="btn-topbar-action" title="Paramètres, Authentification et MCP">
+            ⚙️
+          </button>
+        </div>
+      </header>
+
+      <!-- Chat Scroll View -->
+      <div id="chat-scroll" class="chat-container">
+        <!-- Welcome Hero Banner (shown when conversation has no messages) -->
+        <div id="welcome-hero" class="welcome-hero">
+          <div class="welcome-icon">🤖</div>
+          <h1 class="welcome-title">Bienvenue sur Chassitant</h1>
+          <p class="welcome-subtitle">
+            Votre assistant intelligent autonome pour Home Assistant, propulsé par Google Antigravity (agy) et le serveur MCP Home Assistant.
+          </p>
+          <div class="suggestion-chips">
+            <button class="suggestion-chip" data-prompt="Donne-moi un aperçu météo et la consommation électrique de la maison">
+              <span>📊</span>
+              <span>Bilan météo & consommation de la maison</span>
+            </button>
+            <button class="suggestion-chip" data-prompt="Quelles sont les lumières ou appareils actuellement allumés ?">
+              <span>💡</span>
+              <span>Lumières et appareils actuellement allumés</span>
+            </button>
+            <button class="suggestion-chip" data-prompt="Crée une nouvelle carte Lovelace avec les informations météo et températures">
+              <span>🎨</span>
+              <span>Créer une carte Lovelace météo & températures</span>
+            </button>
+            <button class="suggestion-chip" data-prompt="Quelles sont les entités en état d'erreur ou indisponibles dans Home Assistant ?">
+              <span>🔍</span>
+              <span>Vérifier les entités en erreur ou indisponibles</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Rendered messages stream -->
+        <div id="messages-list" style="display: flex; flex-direction: column; gap: 16px;"></div>
+
+        <!-- Thinking / Processing Indicator -->
+        <div id="thinking-indicator" class="thinking-row" style="display: none;">
+          <div class="message-avatar" style="background: var(--accent-gradient); color: white;">🤖</div>
+          <div class="thinking-bubble">
+            <div class="pulse-dot"></div>
+            <span id="thinking-text">Chassitant analyse votre demande et exécute les outils...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <footer class="chat-input-area">
+        <div class="chat-input-container">
+          <div class="chat-input-box">
+            <textarea
+              id="prompt-input"
+              class="chat-textarea"
+              rows="1"
+              placeholder="Écrivez votre message à Chassitant... (ex: Crée une automatisation, donne-moi la météo...)"
+            ></textarea>
+            <button id="btn-send" class="btn-send" title="Envoyer le message (Entrée)">
+              ➤
+            </button>
+          </div>
+          <div class="input-footer-hint">
+            <span>Astuce : <strong>Entrée</strong> pour envoyer, <strong>Maj + Entrée</strong> pour saut de ligne</span>
+            <span id="active-model-hint" style="opacity: 0.8;">Modèle : Auto</span>
+          </div>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <!-- Settings & Configuration Modal -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">
+          <span>⚙️</span>
+          <span>Configuration Chassitant</span>
+        </div>
+        <button id="btn-close-modal" class="btn-close-modal" title="Fermer">✕</button>
+      </div>
+
+      <div class="modal-tabs">
+        <button class="modal-tab active" data-tab="tab-auth">Google & Auth</button>
+        <button class="modal-tab" data-tab="tab-mcp">Outils MCP Home Assistant</button>
+        <button class="modal-tab" data-tab="tab-model">Modèle & Options</button>
+        <button class="modal-tab" data-tab="tab-about">À propos</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Tab 1: Auth & Google -->
+        <div id="tab-auth" class="tab-pane active">
+          <div class="auth-card">
+            <div class="auth-header">
+              <strong>Session Google Antigravity</strong>
+              <span id="auth-modal-badge" class="auth-status-tag ko">Vérification...</span>
+            </div>
+            <p id="auth-modal-desc" class="form-help">
+              Détection de la session en cours...
+            </p>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Clé API Google Gemini (Recommandé si pas d'OAuth)</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="password" id="input-gemini-key" class="form-input" style="flex:1;" placeholder="AIzaSy..." />
+              <button id="btn-save-gemini-key" class="btn-primary" style="white-space: nowrap;">Enregistrer</button>
+            </div>
+            <span class="form-help">
+              Vous pouvez obtenir une clé gratuite sur <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> pour une authentification immédiate et sans expiration.
+            </span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Session Google OAuth interactive</label>
+            <p class="form-help">
+              Si vous préférez utiliser votre compte Google via OAuth, vous pouvez initialiser la connexion dans le terminal embarqué de l'Add-on.
+            </p>
+            <button id="btn-check-auth" class="btn-secondary" style="align-self: flex-start;">
+              🔄 Revérifier le statut de connexion
+            </button>
+          </div>
+        </div>
+
+        <!-- Tab 2: MCP Tools -->
+        <div id="tab-mcp" class="tab-pane">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <p class="form-help" style="margin: 0;">
+              Le serveur <strong>ha-mcp</strong> est pré-embarqué et connecté automatiquement via le jeton Supervisor de Home Assistant.
+            </p>
+            <button id="btn-refresh-mcp" class="btn-secondary" style="font-size: 12px; padding: 4px 8px;">
+              🔄 Reconnecter MCP
+            </button>
+          </div>
+          <div id="mcp-server-status" class="auth-card">
+            <strong>Serveurs MCP Actifs</strong>
+            <div id="mcp-servers-list" style="display: flex; flex-direction: column; gap: 8px; margin-top: 6px;">
+              Chargement des outils...
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Model & Options -->
+        <div id="tab-model" class="tab-pane">
+          <div class="form-group">
+            <label class="form-label">Modèle d'Intelligence Artificielle</label>
+            <select id="select-model" class="form-select">
+              <option value="default">Par défaut (Recommandé)</option>
+              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra-rapide)</option>
+              <option value="gemini-2.5-pro">Gemini 2.5 Pro (Raisonnement avancé)</option>
+              <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+              <option value="claude-3-7-sonnet">Claude 3.7 Sonnet</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Effort de raisonnement (Reasoning effort)</label>
+            <select id="select-effort" class="form-select">
+              <option value="high" selected>High (Élevé — Recommandé pour MCP)</option>
+              <option value="medium">Medium (Moyen)</option>
+              <option value="low">Low (Faible / Rapide)</option>
+              <option value="max">Max (Raisonnement maximal)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Délai d'expiration maximal (secondes)</label>
+            <input type="number" id="input-timeout" class="form-input" value="120" min="30" max="600" />
+            <span class="form-help">Temps maximal alloué à l'IA pour réfléchir et appeler les outils Home Assistant.</span>
+          </div>
+        </div>
+
+        <!-- Tab 4: About -->
+        <div id="tab-about" class="tab-pane">
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <h3>Chassitant v1.3.0</h3>
+            <p class="form-help">
+              Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
+            </p>
+            <div class="auth-card">
+              <div><strong>Auteur :</strong> Denis (hyndruide)</div>
+              <div><strong>Dépôt GitHub :</strong> <a href="https://github.com/hyndruide/chassitant" target="_blank">hyndruide/chassitant</a></div>
+              <div><strong>Stockage persistant :</strong> <code>/data/conversations.json</code></div>
+              <div><strong>Outils MCP :</strong> ~80+ outils Home Assistant (ha-mcp 9.1.2)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button id="btn-save-settings" class="btn-primary">Enregistrer les paramètres</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Libraries -->
+  <script src="libs/marked.min.js"></script>
+  <script src="libs/highlight.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

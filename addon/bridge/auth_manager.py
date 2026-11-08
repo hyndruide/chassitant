@@ -53,8 +53,22 @@ class AuthManager:
         self._config.setdefault("default_model", "default")
         self._config.setdefault("default_effort", "high")
 
+        # Export Gemini API key to environment if configured
+        if self._config.get("gemini_api_key"):
+            os.environ["GEMINI_API_KEY"] = self._config["gemini_api_key"]
+
         self.save_config()
         return self._config
+
+    def set_gemini_api_key(self, key: str) -> None:
+        """Store Gemini API key and export it to environment."""
+        self._config["gemini_api_key"] = key.strip()
+        os.environ["GEMINI_API_KEY"] = key.strip()
+        self.save_config()
+
+    def get_gemini_api_key(self) -> str:
+        """Return configured Gemini API key if any."""
+        return self._config.get("gemini_api_key", "")
 
     def save_config(self) -> None:
         """Persist current configuration to disk."""

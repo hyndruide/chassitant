@@ -1,17 +1,18 @@
 name: "Chassitant (Antigravity agy)"
 slug: "chassitant_agy"
-description: "Exécute Google Antigravity CLI (agy) directement sur Home Assistant 24/7 avec terminal Ingress."
-version: "1.0.7"
+description: "Chatbot IA avec Drawer rétractable, Google Antigravity agy et serveur MCP Home Assistant pré-embarqué."
+version: "1.3.0"
 startup: application
 boot: auto
 init: false
+homeassistant_api: true
 arch:
   - aarch64
   - amd64
 ingress: true
 ingress_port: 8098
 panel_icon: mdi:robot-excited
-panel_title: "Chassitant agy"
+panel_title: "Chassitant"
 ports:
   8099/tcp: 8099
 ports_description:

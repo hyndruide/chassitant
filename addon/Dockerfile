@@ -31,11 +31,15 @@ RUN curl -fsSL https://antigravity.google/cli/install.sh | bash \
     && if [ -f /root/bin/agy ]; then cp /root/bin/agy /usr/local/bin/agy; fi \
     && chmod +x /usr/local/bin/agy || true
 
+# Install ha-mcp (Home Assistant MCP Server)
+RUN pip3 install --no-cache-dir --break-system-packages ha-mcp
+
 # Set working directory
 WORKDIR /app
 
 # Copy application files
 COPY bridge/ /app/bridge/
+COPY web/ /app/web/
 COPY run.sh /app/run.sh
 COPY onboarding.sh /app/onboarding.sh
 

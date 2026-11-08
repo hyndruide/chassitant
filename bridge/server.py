@@ -1,10 +1,14 @@
-"""Chassitant Bridge HTTP Server.
+"""Chassitant Bridge & Chatbot Server.
 
-Lightweight, zero-dependency server connecting Home Assistant to Antigravity CLI (agy).
+Multi-threaded HTTP server providing:
+- Ingress Web UI (Chatbot with Collapsible Drawer, Multi-Conversations, Auth & MCP manager)
+- REST API for conversations and prompts
+- Direct API endpoint for Home Assistant Assist (/api/process)
 """
 
 import json
 import logging
+import mimetypes
 import os
 import socket
 import sys
@@ -14,11 +18,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-# Ensure local imports work regardless of execution directory
+# Ensure local imports work
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from bridge.agy_client import AgyClient
 from bridge.auth_manager import AuthManager
+from bridge.conversation_store import ConversationStore
+from bridge.mcp_manager import McpManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,9 +35,9 @@ logger = logging.getLogger("chassitant.server")
 
 
 class ChassitantRequestHandler(BaseHTTPRequestHandler):
-    """HTTP Request Handler for Chassitant Bridge."""
+    """HTTP Request Handler for Chassitant Web UI & Bridge API."""
 
-    server_version = "ChassitantBridge/1.0"
+    server_version = "Chassitant/1.1"
 
     @property
     def auth_manager(self) -> AuthManager:
@@ -41,6 +47,14 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
     def agy_client(self) -> AgyClient:
         return self.server.agy_client  # type: ignore
 
+    @property
+    def conv_store(self) -> ConversationStore:
+        return self.server.conv_store  # type: ignore
+
+    @property
+    def mcp_manager(self) -> McpManager:
+        return self.server.mcp_manager  # type: ignore
+
     def send_json(self, status: int, data: Dict[str, Any]) -> None:
         """Send JSON response with CORS headers."""
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -49,7 +63,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
         self.end_headers()
         self.wfile.write(body)
 
@@ -58,24 +72,25 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
         self.send_response(HTTPStatus.NO_CONTENT)
         self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Headers", "Authorization, Content-Type")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
         self.end_headers()
 
     def check_authorization(self) -> bool:
-        """Validate Bearer token in Authorization header."""
+        """Validate Bearer token with local access exemption."""
+        client_ip = self.client_address[0]
+        # Ingress and local container network calls are trusted
+        is_local = (
+            client_ip in ("127.0.0.1", "::1", "localhost")
+            or client_ip.startswith("172.30.")
+            or client_ip.startswith("172.17.")
+        )
+
         auth_header = self.headers.get("Authorization", "")
         token = None
         if auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()
         elif auth_header:
             token = auth_header.strip()
-
-        client_ip = self.client_address[0]
-        is_local = (
-            client_ip in ("127.0.0.1", "::1", "localhost")
-            or client_ip.startswith("172.30.")
-            or client_ip.startswith("172.17.")
-        )
 
         if not self.auth_manager.validate_token(token):
             if is_local:
@@ -90,35 +105,121 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             return False
         return True
 
+    def read_json_body(self) -> Optional[Dict[str, Any]]:
+        """Parse request body as JSON."""
+        content_length = int(self.headers.get("Content-Length", 0))
+        if content_length == 0:
+            return {}
+        try:
+            raw = self.rfile.read(content_length).decode("utf-8")
+            return json.loads(raw)
+        except Exception as err:
+            logger.warning("Failed parsing JSON body: %s", err)
+            return None
+
+    def get_clean_path(self) -> str:
+        """Strip X-Ingress-Path or /api/hassio_ingress/ prefix if present."""
+        path = urlparse(self.path).path
+        ingress_path = self.headers.get("X-Ingress-Path", "").rstrip("/")
+        if ingress_path and path.startswith(ingress_path):
+            path = path[len(ingress_path):]
+        elif "/api/hassio_ingress/" in path:
+            parts = path.split("/api/hassio_ingress/")
+            if len(parts) > 1:
+                token_and_rest = parts[1].split("/", 1)
+                path = "/" + token_and_rest[1] if len(token_and_rest) > 1 else "/"
+        return path if path else "/"
+
+    def serve_static(self, rel_path: str) -> bool:
+        """Serve static files for the Ingress web UI."""
+        web_dir: Path = self.server.web_dir  # type: ignore
+        if not web_dir.is_dir():
+            return False
+
+        if rel_path in ("", "/"):
+            rel_path = "index.html"
+        rel_path = rel_path.lstrip("/")
+
+        clean_path = (web_dir / rel_path).resolve()
+        if not clean_path.is_file() or not str(clean_path).startswith(str(web_dir.resolve())):
+            # If not found directly, try index.html for SPA routing
+            clean_path = (web_dir / "index.html").resolve()
+            if not clean_path.is_file():
+                return False
+
+        content_type, _ = mimetypes.guess_type(str(clean_path))
+        content_type = content_type or "application/octet-stream"
+        if content_type.startswith("text/") or content_type in ("application/javascript", "application/json"):
+            content_type += "; charset=utf-8"
+
+        try:
+            with open(clean_path, "rb") as f:
+                content = f.read()
+            self.send_response(HTTPStatus.OK)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return True
+        except Exception as err:
+            logger.warning("Error serving static %s: %s", clean_path, err)
+            return False
+
     def do_GET(self) -> None:
         """Handle GET requests."""
-        path = urlparse(self.path).path
+        path = self.get_clean_path()
 
-        # Health / Status check (public or protected)
-        if path in ("/", "/api/status", "/api/health"):
+        # 1. API Conversations list
+        if path == "/api/conversations":
             if not self.check_authorization():
                 return
+            convs = self.conv_store.list_conversations()
+            self.send_json(HTTPStatus.OK, {"success": True, "conversations": convs})
+            return
 
-            auth_ok, auth_msg = self.agy_client.check_auth(timeout=10)
-            mcp_servers = self.agy_client.list_mcp_servers()
+        # 2. API Single Conversation
+        if path.startswith("/api/conversations/"):
+            if not self.check_authorization():
+                return
+            conv_id = path.replace("/api/conversations/", "").strip()
+            conv = self.conv_store.get_conversation(conv_id)
+            if conv:
+                self.send_json(HTTPStatus.OK, {"success": True, "conversation": conv})
+            else:
+                self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": "Conversation introuvable"})
+            return
+
+        # 3. Status endpoint
+        if path in ("/api/status", "/api/health"):
+            if not self.check_authorization():
+                return
+            auth_ok, auth_msg = self.agy_client.check_auth(timeout=5)
+            mcps = self.mcp_manager.list_mcp_servers()
             models = self.agy_client.list_models()
-
             self.send_json(
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "bridge_version": "1.0.0",
+                    "version": "1.1.0",
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
                     "agy_authenticated": auth_ok,
                     "agy_status_message": auth_msg,
-                    "mcp_servers": mcp_servers,
+                    "mcp_servers": mcps,
                     "models_count": len(models),
                 },
             )
             return
 
-        # List models endpoint
+        # 4. MCP List endpoint
+        if path == "/api/mcp/list":
+            if not self.check_authorization():
+                return
+            mcps = self.mcp_manager.list_mcp_servers()
+            self.send_json(HTTPStatus.OK, {"success": True, "servers": mcps})
+            return
+
+        # 5. Models list
         if path == "/api/models":
             if not self.check_authorization():
                 return
@@ -126,94 +227,192 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, {"success": True, "models": models})
             return
 
-        self.send_json(
-            HTTPStatus.NOT_FOUND,
-            {"success": False, "error": f"Endpoint inconnu : {path}"},
-        )
-
-    def do_POST(self) -> None:
-        """Handle POST requests."""
-        path = urlparse(self.path).path
-
-        # Endpoint to check auth token
-        if path in ("/api/auth/check", "/api/auth/verify"):
-            if not self.check_authorization():
-                return
-            auth_ok, auth_msg = self.agy_client.check_auth(timeout=10)
+        # 6. Auth status
+        if path == "/api/auth/status":
+            auth_ok, auth_msg = self.agy_client.check_auth(timeout=5)
             self.send_json(
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "valid": True,
-                    "agy_authenticated": auth_ok,
+                    "authenticated": auth_ok,
                     "message": auth_msg,
                 },
             )
             return
 
-        # Main processing endpoint
-        if path in ("/api/process", "/api/chat"):
+        # Fallback to static web UI files
+        if self.serve_static(path):
+            return
+
+        self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": f"Endpoint inconnu : {path}"})
+
+    def do_POST(self) -> None:
+        """Handle POST requests."""
+        path = self.get_clean_path()
+        payload = self.read_json_body()
+        if payload is None:
+            self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "JSON invalide"})
+            return
+
+        # 1. Create new conversation
+        if path == "/api/conversations":
             if not self.check_authorization():
                 return
+            title = payload.get("title")
+            conv = self.conv_store.create_conversation(title=title)
+            self.send_json(HTTPStatus.CREATED, {"success": True, "conversation": conv})
+            return
 
-            # Read request body
-            content_length = int(self.headers.get("Content-Length", 0))
-            if content_length == 0:
-                self.send_json(
-                    HTTPStatus.BAD_REQUEST,
-                    {"success": False, "error": "Corps de requête vide"},
-                )
+        # 2. Send message in a conversation thread
+        if path.startswith("/api/conversations/") and path.endswith("/send"):
+            if not self.check_authorization():
+                return
+            conv_id = path.replace("/api/conversations/", "").replace("/send", "").strip()
+            prompt = payload.get("prompt", "").strip()
+            if not prompt:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "Le prompt ne peut pas être vide"})
                 return
 
-            try:
-                raw_body = self.rfile.read(content_length).decode("utf-8")
-                payload = json.loads(raw_body)
-            except Exception as err:
-                self.send_json(
-                    HTTPStatus.BAD_REQUEST,
-                    {"success": False, "error": f"JSON invalide : {err}"},
-                )
-                return
+            # Store user message
+            self.conv_store.add_message(conv_id=conv_id, role="user", text=prompt)
 
-            prompt = payload.get("prompt", "")
-            if not prompt or not isinstance(prompt, str):
-                self.send_json(
-                    HTTPStatus.BAD_REQUEST,
-                    {"success": False, "error": "Le paramètre 'prompt' est obligatoire."},
-                )
-                return
-
-            conversation_id = payload.get("conversation_id")
             model = payload.get("model")
             effort = payload.get("effort")
-            dangerously_skip_permissions = payload.get(
-                "dangerously_skip_permissions", True
-            )
-            timeout = int(payload.get("timeout", 60))
+            timeout = int(payload.get("timeout", 120))
 
-            logger.info(
-                "Traitement de la requête: prompt='%s...' (conv_id=%s)",
-                prompt[:40],
-                conversation_id,
-            )
-
+            logger.info("Executing agy turn for conversation %s: '%s...'", conv_id, prompt[:40])
             result = self.agy_client.process(
                 prompt=prompt,
-                conversation_id=conversation_id,
+                conversation_id=conv_id,
                 model=model,
                 effort=effort,
-                dangerously_skip_permissions=dangerously_skip_permissions,
+                dangerously_skip_permissions=True,
                 timeout=timeout,
             )
 
-            status_code = HTTPStatus.OK if result.get("success") else HTTPStatus.INTERNAL_SERVER_ERROR
-            self.send_json(status_code, result)
+            response_text = result.get("response", "").strip()
+            if not response_text:
+                if not result.get("success"):
+                    response_text = f"Erreur : {result.get('error', 'Aucune réponse reçue de l\'agent.')}"
+                else:
+                    response_text = "Action exécutée."
+
+            # Store assistant message
+            assistant_msg = self.conv_store.add_message(
+                conv_id=conv_id,
+                role="assistant",
+                text=response_text,
+                tokens=result.get("usage", {}).get("total_tokens"),
+                duration=result.get("duration_seconds"),
+            )
+
+            conv = self.conv_store.get_conversation(conv_id)
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": result.get("success", False),
+                    "message": assistant_msg,
+                    "conversation": conv,
+                    "status": result.get("status"),
+                    "duration_seconds": result.get("duration_seconds"),
+                    "usage": result.get("usage", {}),
+                },
+            )
             return
 
-        self.send_json(
-            HTTPStatus.NOT_FOUND,
-            {"success": False, "error": f"Endpoint inconnu : {path}"},
-        )
+        # 3. Auto-configure MCP with Home Assistant
+        if path == "/api/mcp/setup":
+            if not self.check_authorization():
+                return
+            success, msg = self.mcp_manager.auto_configure_homeassistant_mcp()
+            self.send_json(HTTPStatus.OK, {"success": success, "message": msg})
+            return
+
+        # 4. Backward-compatible /api/process (for HA Assist conversation entity)
+        if path in ("/api/process", "/api/chat"):
+            if not self.check_authorization():
+                return
+            prompt = payload.get("prompt", "")
+            if not prompt:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "Prompt requis"})
+                return
+
+            conv_id = payload.get("conversation_id")
+            model = payload.get("model")
+            effort = payload.get("effort")
+            timeout = int(payload.get("timeout", 120))
+
+            res = self.agy_client.process(
+                prompt=prompt,
+                conversation_id=conv_id,
+                model=model,
+                effort=effort,
+                dangerously_skip_permissions=True,
+                timeout=timeout,
+            )
+            status_code = HTTPStatus.OK if res.get("success") else HTTPStatus.INTERNAL_SERVER_ERROR
+            self.send_json(status_code, res)
+            return
+
+        # 5. Auth check
+        if path in ("/api/auth/check", "/api/auth/verify"):
+            if not self.check_authorization():
+                return
+            auth_ok, auth_msg = self.agy_client.check_auth(timeout=5)
+            self.send_json(HTTPStatus.OK, {"success": True, "valid": True, "agy_authenticated": auth_ok, "message": auth_msg})
+            return
+
+        # 6. Save Gemini API key
+        if path == "/api/auth/api-key":
+            if not self.check_authorization():
+                return
+            key = (payload.get("api_key") or "").strip()
+            if not key:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "Clé API requise"})
+                return
+            self.auth_manager.set_gemini_api_key(key)
+            auth_ok, auth_msg = self.agy_client.check_auth(timeout=5)
+            self.send_json(HTTPStatus.OK, {"success": True, "authenticated": auth_ok, "message": auth_msg})
+            return
+
+        self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": f"Endpoint inconnu : {path}"})
+
+    def do_PATCH(self) -> None:
+        """Handle PATCH requests (e.g. rename conversation)."""
+        path = self.get_clean_path()
+        if path.startswith("/api/conversations/"):
+            if not self.check_authorization():
+                return
+            conv_id = path.replace("/api/conversations/", "").strip()
+            payload = self.read_json_body() or {}
+            new_title = payload.get("title", "").strip()
+            if not new_title:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "Titre requis"})
+                return
+            ok = self.conv_store.rename_conversation(conv_id, new_title)
+            if ok:
+                self.send_json(HTTPStatus.OK, {"success": True, "conversation": self.conv_store.get_conversation(conv_id)})
+            else:
+                self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": "Conversation non trouvée"})
+            return
+
+        self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": f"Endpoint inconnu : {path}"})
+
+    def do_DELETE(self) -> None:
+        """Handle DELETE requests (e.g. delete conversation)."""
+        path = self.get_clean_path()
+        if path.startswith("/api/conversations/"):
+            if not self.check_authorization():
+                return
+            conv_id = path.replace("/api/conversations/", "").strip()
+            ok = self.conv_store.delete_conversation(conv_id)
+            if ok:
+                self.send_json(HTTPStatus.OK, {"success": True, "message": "Conversation supprimée"})
+            else:
+                self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": "Conversation non trouvée"})
+            return
+
+        self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": f"Endpoint inconnu : {path}"})
 
     def log_message(self, format: str, *args: Any) -> None:
         """Custom HTTP request logger."""
@@ -221,108 +420,79 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
 
 
 class ChassitantBridgeServer(ThreadingHTTPServer):
-    """Threaded HTTP Server carrying auth and agy client state."""
+    """Threaded HTTP Server carrying application state."""
 
     def __init__(
         self,
         server_address: tuple[str, int],
         auth_manager: AuthManager,
         agy_client: AgyClient,
+        conv_store: ConversationStore,
+        mcp_manager: McpManager,
+        web_dir: Path,
     ) -> None:
         super().__init__(server_address, ChassitantRequestHandler)
         self.auth_manager = auth_manager
         self.agy_client = agy_client
-
-
-def get_local_ip_addresses() -> List[str]:
-    """Retrieve non-loopback local IPv4 addresses."""
-    ips = []
-    try:
-        hostname = socket.gethostname()
-        _, _, host_ips = socket.gethostbyname_ex(hostname)
-        for ip in host_ips:
-            if not ip.startswith("127.") and not ip.startswith("169.254."):
-                ips.append(ip)
-    except Exception:
-        pass
-    if not ips:
-        ips.append("127.0.0.1")
-    return ips
+        self.conv_store = conv_store
+        self.mcp_manager = mcp_manager
+        self.web_dir = web_dir
 
 
 def main() -> None:
-    """Entry point for the Chassitant Bridge server."""
+    """Entry point for the Chassitant Server."""
     auth_mgr = AuthManager()
     agy_cli = AgyClient()
+    conv_store = ConversationStore()
+    mcp_mgr = McpManager()
 
     config = auth_mgr.config
     host = config.get("host", "0.0.0.0")
-    port = int(config.get("port", 8099))
-    api_key = auth_mgr.get_api_key()
+    ingress_port = int(os.getenv("INGRESS_PORT", 8098))
+    bridge_port = int(os.getenv("PORT", config.get("port", 8099)))
+
+    # Determine web directory
+    web_dir = Path(__file__).resolve().parent.parent / "addon" / "web"
+    if not web_dir.is_dir():
+        web_dir = Path("/app/web")
 
     print("=" * 68, flush=True)
-    print(" 🌟 CHASSITANT - PASSERELLE ANTIGRAVITY (AGY) POUR HOME ASSISTANT 🌟", flush=True)
+    print(" 🌟 CHASSITANT - CHATBOT IA & BRIDGE HOME ASSISTANT 🌟", flush=True)
     print("=" * 68, flush=True)
 
-    # 1. Verification binaire agy
-    if not agy_cli.is_installed():
-        print("\n❌ ERREUR : Le binaire 'agy' est introuvable sur votre système !", flush=True)
-        print("Veuillez installer Antigravity CLI ou vous assurer qu'il est dans le PATH.", flush=True)
-        print("Emplacements vérifiés : PATH, ~/.local/bin, ~/AppData/Local/agy/bin", flush=True)
-        sys.exit(1)
+    # Auto-configure MCP if inside Home Assistant container
+    if os.getenv("SUPERVISOR_TOKEN"):
+        print("🔌 Détection de Home Assistant OS : Configuration automatique de ha-mcp...", flush=True)
+        mcp_ok, mcp_msg = mcp_mgr.auto_configure_homeassistant_mcp()
+        print(f"   -> {mcp_msg}", flush=True)
 
-    print(f"✅ Binaire agy détecté : {agy_cli.binary_path}", flush=True)
+    auth_ok, auth_msg = agy_cli.check_auth(timeout=5)
+    print(f"🔐 Statut Google Antigravity : {auth_msg}", flush=True)
 
-    # 2. Vérification authentification Google Antigravity
-    print("🔍 Vérification de la session Google Antigravity...", flush=True)
-    auth_ok, auth_msg = agy_cli.check_auth(timeout=10)
+    print(f"🚀 Serveur Chatbot Web UI (Ingress) : http://{host}:{ingress_port}", flush=True)
+    print(f"📁 Fichiers statiques Web servis depuis : {web_dir}", flush=True)
 
-    if not auth_ok:
-        print(f"\n⚠️  {auth_msg}", flush=True)
-        if sys.stdin.isatty():
-            print("👉 Lancement de la procédure de connexion Google...", flush=True)
-            login_success = agy_cli.trigger_interactive_login()
-            if not login_success:
-                print("\n❌ Échec de l'authentification Google. Relancez le script pour réessayer.", flush=True)
-                sys.exit(1)
-            auth_ok, auth_msg = agy_cli.check_auth(timeout=10)
-        else:
-            print("ℹ️ Mode arrière-plan : connectez-vous via le terminal Ingress dans Home Assistant.", flush=True)
-    else:
-        print("✅ Authentification Google active et prête !", flush=True)
+    server_ingress = ChassitantBridgeServer((host, ingress_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir)
 
-    # 3. Informations MCP
-    mcps = agy_cli.list_mcp_servers()
-    if mcps:
-        print(f"🔌 Serveurs MCP connectés ({len(mcps)}) :", flush=True)
-        for m in mcps:
-            print(f"   • {m.get('name')} ({m.get('status')}) -> {m.get('target', '')[:45]}", flush=True)
-    else:
-        print("ℹ️ Aucun serveur MCP configuré dans agy (ou détection désactivée).", flush=True)
+    server_bridge = None
+    if bridge_port != ingress_port:
+        try:
+            import threading
+            server_bridge = ChassitantBridgeServer((host, bridge_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir)
+            threading.Thread(target=server_bridge.serve_forever, daemon=True).start()
+            print(f"🚀 Serveur Assist Bridge (Core API)  : http://{host}:{bridge_port}", flush=True)
+        except Exception as err:
+            logger.warning("Could not bind bridge port %d: %s", bridge_port, err)
 
-    # 4. Affichage des coordonnées de connexion
-    local_ips = get_local_ip_addresses()
-    primary_ip = local_ips[0] if local_ips else "127.0.0.1"
+    print("=" * 68 + "\n", flush=True)
 
-    print("\n" + "-" * 68, flush=True)
-    print("🚀 LE SERVEUR BRIDGE EST EN COURS D'EXÉCUTION !", flush=True)
-    print("-" * 68, flush=True)
-    print("À renseigner dans Home Assistant (Ajouter intégration > Chassitant) :", flush=True)
-    print(f"  • Hôte / IP :  {primary_ip}", flush=True)
-    print(f"  • Port      :  {port}", flush=True)
-    print(f"  • Jeton API :  {api_key}", flush=True)
-    print(f"\nToutes les adresses IP disponibles :", flush=True)
-    for ip in local_ips:
-        print(f"  - http://{ip}:{port}", flush=True)
-    print("-" * 68, flush=True)
-    print("Appuyez sur Ctrl+C pour arrêter le serveur.\n", flush=True)
-
-    server = ChassitantBridgeServer((host, port), auth_mgr, agy_cli)
     try:
-        server.serve_forever()
+        server_ingress.serve_forever()
     except KeyboardInterrupt:
-        print("\nArrêt du serveur Chassitant Bridge...")
-        server.server_close()
+        print("\nArrêt du serveur Chassitant...", flush=True)
+        server_ingress.server_close()
+        if server_bridge:
+            server_bridge.server_close()
         sys.exit(0)
 
 
