@@ -270,14 +270,17 @@ def main() -> None:
 
     if not auth_ok:
         print(f"\n⚠️  {auth_msg}", flush=True)
-        print("👉 Lancement de la procédure de connexion Google...", flush=True)
-        login_success = agy_cli.trigger_interactive_login()
-        if not login_success:
-            print("\n❌ Échec de l'authentification Google. Relancez le script pour réessayer.", flush=True)
-            sys.exit(1)
-        auth_ok, auth_msg = agy_cli.check_auth(timeout=10)
-
-    print("✅ Authentification Google active et prête !", flush=True)
+        if sys.stdin.isatty():
+            print("👉 Lancement de la procédure de connexion Google...", flush=True)
+            login_success = agy_cli.trigger_interactive_login()
+            if not login_success:
+                print("\n❌ Échec de l'authentification Google. Relancez le script pour réessayer.", flush=True)
+                sys.exit(1)
+            auth_ok, auth_msg = agy_cli.check_auth(timeout=10)
+        else:
+            print("ℹ️ Mode arrière-plan : connectez-vous via le terminal Ingress dans Home Assistant.", flush=True)
+    else:
+        print("✅ Authentification Google active et prête !", flush=True)
 
     # 3. Informations MCP
     mcps = agy_cli.list_mcp_servers()

@@ -17,7 +17,7 @@ BRIDGE_PID=$!
 
 INGRESS_PORT="${INGRESS_PORT:-8098}"
 echo "[Chassitant] Démarrage du terminal Ingress sur le port ${INGRESS_PORT}..."
-ttyd -p "${INGRESS_PORT}" -t fontSize=15 -t theme='{"background": "#1e1e1e"}' /app/onboarding.sh &
+ttyd -W -p "${INGRESS_PORT}" -t fontSize=15 -t theme='{"background": "#1e1e1e"}' /app/onboarding.sh &
 TTYD_PID=$!
 
 # Trap signals for graceful shutdown
