@@ -24,10 +24,12 @@ from urllib.parse import urlparse
 # Ensure local imports work
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import queue
 from bridge.agy_client import AgyClient
 from bridge.auth_manager import AuthManager
 from bridge.conversation_store import ConversationStore
 from bridge.mcp_manager import McpManager
+from bridge.turn_manager import ActiveTurn, TurnManager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -57,6 +59,10 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
     @property
     def mcp_manager(self) -> McpManager:
         return self.server.mcp_manager  # type: ignore
+
+    @property
+    def turn_manager(self) -> TurnManager:
+        return self.server.turn_manager  # type: ignore
 
     def send_json(self, status: int, data: Dict[str, Any]) -> None:
         """Send JSON response with CORS headers."""
@@ -132,6 +138,49 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 token_and_rest = parts[1].split("/", 1)
                 path = "/" + token_and_rest[1] if len(token_and_rest) > 1 else "/"
         return path if path else "/"
+
+    def stream_turn_sse(self, turn: ActiveTurn) -> None:
+        """Stream live turn events to an SSE client."""
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-cache, no-transform")
+        self.send_header("Connection", "keep-alive")
+        self.send_header("X-Accel-Buffering", "no")
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.end_headers()
+        try:
+            self.wfile.flush()
+        except Exception:
+            pass
+
+        q = turn.subscribe()
+        try:
+            while True:
+                try:
+                    event = q.get(timeout=1.0)
+                except queue.Empty:
+                    if turn.status != "running":
+                        break
+                    # Keep-alive comment for reverse-proxies
+                    try:
+                        self.wfile.write(b": keep-alive\n\n")
+                        self.wfile.flush()
+                    except Exception:
+                        break
+                    continue
+
+                try:
+                    line = f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    self.wfile.write(line.encode("utf-8"))
+                    self.wfile.flush()
+                except Exception:
+                    # Client disconnected, but background worker keeps running!
+                    break
+
+                if event.get("type") in ("finished", "error"):
+                    break
+        finally:
+            turn.unsubscribe(q)
 
     def serve_static(self, rel_path: str) -> bool:
         """Serve static files for the Ingress web UI."""
@@ -270,14 +319,30 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, {"success": True, "conversations": convs})
             return
 
-        # 2. API Single Conversation
+        # 2. API Single Conversation & Stream Reconnection
         if path.startswith("/api/conversations/"):
             if not self.check_authorization():
                 return
-            conv_id = path.replace("/api/conversations/", "").strip()
+            clean_sub = path.replace("/api/conversations/", "").strip()
+
+            # Live Stream Reconnection endpoint
+            if clean_sub.endswith("/stream"):
+                conv_id = clean_sub.replace("/stream", "").strip()
+                turn = self.turn_manager.get_turn(conv_id)
+                if not turn:
+                    self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": "Aucune tâche en cours pour cette discussion"})
+                    return
+                self.stream_turn_sse(turn)
+                return
+
+            conv_id = clean_sub
             conv = self.conv_store.get_conversation(conv_id)
             if conv:
-                self.send_json(HTTPStatus.OK, {"success": True, "conversation": conv})
+                conv_copy = dict(conv)
+                turn = self.turn_manager.get_turn(conv_id)
+                if turn:
+                    conv_copy["active_turn"] = turn.get_snapshot()
+                self.send_json(HTTPStatus.OK, {"success": True, "conversation": conv_copy})
             else:
                 self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": "Conversation introuvable"})
             return
@@ -423,84 +488,19 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 )
                 return
 
-            # Streaming SSE response
-            logger.info("Executing agy stream turn for conversation %s: '%s...'", conv_id, prompt[:40])
-            self.send_response(HTTPStatus.OK)
-            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-            self.send_header("Cache-Control", "no-cache, no-transform")
-            self.send_header("Connection", "keep-alive")
-            self.send_header("X-Accel-Buffering", "no")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.end_headers()
-            try:
-                self.wfile.flush()
-            except Exception:
-                pass
-
-            def send_sse(ev_obj: dict) -> bool:
-                try:
-                    line = f"data: {json.dumps(ev_obj, ensure_ascii=False)}\n\n"
-                    self.wfile.write(line.encode("utf-8"))
-                    self.wfile.flush()
-                    return True
-                except Exception as ex:
-                    logger.debug("SSE client write failed: %s", ex)
-                    return False
-
-            send_sse({"type": "status", "message": "Initialisation de la réflexion..."})
-
-            steps_log = []
-            full_response_text = ""
-            final_tokens = None
-            final_duration = None
-
-            for event in self.agy_client.process_stream(
+            # Start or subscribe to background turn via TurnManager
+            turn = self.turn_manager.start_turn(
+                conv_id=conv_id,
                 prompt=prompt,
-                conversation_id=conv_id,
+                agy_client=self.agy_client,
+                conv_store=self.conv_store,
                 model=model,
                 effort=effort,
-                dangerously_skip_permissions=True,
                 timeout=timeout,
-            ):
-                etype = event.get("type")
-                if etype == "tool_start":
-                    steps_log.append({
-                        "type": "tool",
-                        "tool": event.get("tool"),
-                        "parameters": event.get("parameters"),
-                        "state": "running",
-                    })
-                elif etype == "tool_end":
-                    tname = event.get("tool")
-                    for s in reversed(steps_log):
-                        if s.get("type") == "tool" and s.get("tool") == tname and s.get("state") == "running":
-                            s["state"] = "done"
-                            s["duration"] = event.get("duration", 0)
-                            s["output"] = event.get("output", "")
-                            break
-                elif etype == "done":
-                    full_response_text = event.get("response", "")
-                    final_tokens = event.get("usage", {}).get("total_tokens")
-                    final_duration = event.get("duration_seconds")
+            )
 
-                if not send_sse(event):
-                    break
-
-            if full_response_text:
-                assistant_msg = self.conv_store.add_message(
-                    conv_id=conv_id,
-                    role="assistant",
-                    text=full_response_text,
-                    tokens=final_tokens,
-                    duration=final_duration,
-                    steps=steps_log,
-                )
-                conv = self.conv_store.get_conversation(conv_id)
-                send_sse({
-                    "type": "finished",
-                    "message": assistant_msg,
-                    "conversation": conv,
-                })
+            # Stream live events to this client (turn continues in background if client leaves)
+            self.stream_turn_sse(turn)
             return
 
         # 3. Auto-configure MCP with Home Assistant
@@ -616,6 +616,7 @@ class ChassitantBridgeServer(ThreadingHTTPServer):
         conv_store: ConversationStore,
         mcp_manager: McpManager,
         web_dir: Path,
+        turn_manager: Optional[TurnManager] = None,
     ) -> None:
         super().__init__(server_address, ChassitantRequestHandler)
         self.auth_manager = auth_manager
@@ -623,6 +624,7 @@ class ChassitantBridgeServer(ThreadingHTTPServer):
         self.conv_store = conv_store
         self.mcp_manager = mcp_manager
         self.web_dir = web_dir
+        self.turn_manager = turn_manager or TurnManager()
 
 
 def main() -> None:
@@ -631,6 +633,7 @@ def main() -> None:
     agy_cli = AgyClient()
     conv_store = ConversationStore()
     mcp_mgr = McpManager()
+    turn_mgr = TurnManager()
 
     config = auth_mgr.config
     host = config.get("host", "0.0.0.0")
@@ -657,13 +660,13 @@ def main() -> None:
     print(f"🚀 Serveur Chatbot Web UI (Ingress) : http://{host}:{ingress_port}", flush=True)
     print(f"📁 Fichiers statiques Web servis depuis : {web_dir}", flush=True)
 
-    server_ingress = ChassitantBridgeServer((host, ingress_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir)
+    server_ingress = ChassitantBridgeServer((host, ingress_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir, turn_mgr)
 
     server_bridge = None
     if bridge_port != ingress_port:
         try:
             import threading
-            server_bridge = ChassitantBridgeServer((host, bridge_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir)
+            server_bridge = ChassitantBridgeServer((host, bridge_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir, turn_mgr)
             threading.Thread(target=server_bridge.serve_forever, daemon=True).start()
             print(f"🚀 Serveur Assist Bridge (Core API)  : http://{host}:{bridge_port}", flush=True)
         except Exception as err:

@@ -41,7 +41,7 @@
   // Application State
   const state = {
     conversations: [],
-    activeConvId: null,
+    activeConvId: localStorage.getItem('chassitant_active_conv') || null,
     activeConversation: null,
     drawerOpen: true,
     isThinking: false,
@@ -215,11 +215,11 @@
       state.conversations = data.conversations || [];
       renderDrawerConversations();
 
-      // If active conversation is not set or not in list, pick the first one or create new
+      const savedConvId = localStorage.getItem('chassitant_active_conv');
       if (state.conversations.length > 0) {
-        const targetId = state.activeConvId || (selectLast ? state.conversations[0].id : null);
+        let targetId = savedConvId || state.activeConvId;
         const exists = state.conversations.some((c) => c.id === targetId);
-        if (exists) {
+        if (exists && targetId) {
           await selectConversation(targetId);
         } else {
           await selectConversation(state.conversations[0].id);
@@ -309,14 +309,194 @@
 
   async function selectConversation(convId) {
     state.activeConvId = convId;
+    localStorage.setItem('chassitant_active_conv', convId);
     renderDrawerConversations();
 
     try {
       const data = await apiCall(`/api/conversations/${convId}`);
       state.activeConversation = data.conversation;
       updateChatView();
+
+      // If this conversation has an active background turn, attach live stream!
+      if (data.conversation.active_turn && data.conversation.active_turn.is_running) {
+        attachActiveStream(convId, data.conversation.active_turn);
+      }
     } catch (err) {
       console.error(`Error loading conversation ${convId}:`, err);
+    }
+  }
+
+  async function attachActiveStream(convId, turnSnapshot) {
+    if (document.getElementById(`active-stream-${convId}`)) return;
+
+    setThinking(true);
+
+    const streamRowId = `active-stream-${convId}`;
+    const initialElapsed = turnSnapshot.elapsed_seconds || 0;
+    const initialSteps = turnSnapshot.steps || [];
+    const initialText = turnSnapshot.accumulated_text || '';
+
+    const streamRowHtml = `
+      <div class="message-row assistant" id="${streamRowId}">
+        <div class="message-avatar">🤖</div>
+        <div class="message-bubble" style="min-width: 280px;">
+          <div class="reasoning-box live" id="${streamRowId}-reasoning">
+            <div class="reasoning-header">
+              <div class="reasoning-title">
+                <span class="reasoning-spinner"></span>
+                <span id="${streamRowId}-status">🧠 Réflexion en cours...</span>
+              </div>
+              <span id="${streamRowId}-timer" style="font-family: monospace; opacity: 0.85;">${initialElapsed.toFixed(1)}s</span>
+            </div>
+            <div class="reasoning-body" id="${streamRowId}-steps">
+              <div class="reasoning-step-item done">
+                <span class="reasoning-step-icon">🔍</span>
+                <span class="reasoning-step-text">Reprise de la réflexion en cours...</span>
+              </div>
+              ${initialSteps.map((st, i) => {
+                const name = getToolFriendlyName(st.tool, st.parameters);
+                const durStr = st.duration ? `<span class="reasoning-step-badge">${st.duration.toFixed(2)}s</span>` : '';
+                return `
+                  <div class="reasoning-step-item ${st.state === 'running' ? 'active' : 'done'}" id="${streamRowId}-tool-${i}">
+                    <span class="reasoning-step-icon">⚡</span>
+                    <span class="reasoning-step-text"><strong>${escapeHtml(st.tool)}</strong> : ${escapeHtml(name)} ${durStr}</span>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+          <div id="${streamRowId}-content" class="live-content" style="${initialText ? 'display: block;' : 'display: none;'} margin-top: 8px;">
+            ${initialText ? (window.marked ? window.marked.parse(initialText) : escapeHtml(initialText)) : ''}
+          </div>
+        </div>
+      </div>
+    `;
+
+    el.messagesList.insertAdjacentHTML('beforeend', streamRowHtml);
+    scrollToBottom();
+
+    const streamRow = document.getElementById(streamRowId);
+    const reasoningBox = document.getElementById(`${streamRowId}-reasoning`);
+    const statusText = document.getElementById(`${streamRowId}-status`);
+    const timerText = document.getElementById(`${streamRowId}-timer`);
+    const stepsContainer = document.getElementById(`${streamRowId}-steps`);
+    const contentContainer = document.getElementById(`${streamRowId}-content`);
+
+    const startEpoch = (turnSnapshot.started_at ? turnSnapshot.started_at * 1000 : Date.now() - initialElapsed * 1000);
+    const timerInterval = setInterval(() => {
+      const elapsed = ((Date.now() - startEpoch) / 1000).toFixed(1);
+      if (timerText) timerText.textContent = `${elapsed}s`;
+    }, 100);
+
+    let accumulatedText = initialText;
+
+    try {
+      const url = `${INGRESS_PREFIX}api/conversations/${convId}/stream`;
+      const response = await fetch(url, {
+        headers: { 'Accept': 'text/event-stream' },
+      });
+
+      if (!response.ok) {
+        clearInterval(timerInterval);
+        setThinking(false);
+        const refreshed = await apiCall(`/api/conversations/${convId}`);
+        if (refreshed.conversation) {
+          state.activeConversation = refreshed.conversation;
+          updateChatView();
+        }
+        return;
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop();
+
+        for (const block of parts) {
+          for (const line of block.split('\n')) {
+            if (line.startsWith('data: ')) {
+              const jsonStr = line.slice(6).trim();
+              if (!jsonStr) continue;
+              try {
+                const event = JSON.parse(jsonStr);
+                handleEvent(event);
+              } catch (parseErr) {}
+            }
+          }
+        }
+      }
+
+      function handleEvent(ev) {
+        if (ev.type === 'status') {
+          if (statusText) statusText.textContent = ev.message || 'Réflexion en cours...';
+        } else if (ev.type === 'tool_start') {
+          const friendly = getToolFriendlyName(ev.tool, ev.parameters);
+          if (statusText) statusText.textContent = `⚡ Exécution : ${ev.tool}...`;
+          if (stepsContainer) {
+            stepsContainer.insertAdjacentHTML(
+              'beforeend',
+              `<div class="reasoning-step-item active" id="${streamRowId}-tool-${ev.step_index || Date.now()}">
+                <span class="reasoning-step-icon">⚡</span>
+                <span class="reasoning-step-text"><strong>${escapeHtml(ev.tool)}</strong> : ${escapeHtml(friendly)}</span>
+              </div>`
+            );
+            scrollToBottom();
+          }
+        } else if (ev.type === 'tool_end') {
+          const durStr = ev.duration ? `${ev.duration.toFixed(2)}s` : '';
+          const stepEl = document.getElementById(`${streamRowId}-tool-${ev.step_index || ''}`);
+          if (stepEl) {
+            stepEl.className = 'reasoning-step-item done';
+            if (durStr) stepEl.insertAdjacentHTML('beforeend', `<span class="reasoning-step-badge">${durStr}</span>`);
+          }
+          if (statusText) statusText.textContent = '🧠 Analyse des résultats reçus...';
+          scrollToBottom();
+        } else if (ev.type === 'text_delta') {
+          accumulatedText += ev.delta || '';
+          if (contentContainer) {
+            contentContainer.style.display = 'block';
+            contentContainer.innerHTML = window.marked
+              ? window.marked.parse(accumulatedText)
+              : escapeHtml(accumulatedText).replace(/\n/g, '<br>');
+            setupCodeBlockActions(contentContainer);
+          }
+          scrollToBottom();
+        } else if (ev.type === 'finished') {
+          clearInterval(timerInterval);
+          setThinking(false);
+          if (streamRow) streamRow.remove();
+
+          if (ev.conversation) {
+            state.activeConversation = ev.conversation;
+            el.activeConvTitle.textContent = ev.conversation.title;
+            updateConversationInList(ev.conversation);
+          }
+          if (ev.message) {
+            state.activeConversation.messages.push(ev.message);
+            el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(ev.message));
+            setupCodeBlockActions(el.messagesList);
+          }
+          scrollToBottom();
+        } else if (ev.type === 'error') {
+          clearInterval(timerInterval);
+          setThinking(false);
+          if (statusText) statusText.textContent = `❌ ${ev.error || 'Erreur'}`;
+        }
+      }
+
+      clearInterval(timerInterval);
+      setThinking(false);
+    } catch (err) {
+      clearInterval(timerInterval);
+      setThinking(false);
+      console.debug('attachActiveStream notice:', err);
     }
   }
 
@@ -577,6 +757,7 @@
     }
 
     const convId = state.activeConvId;
+    localStorage.setItem('chassitant_active_conv', convId);
 
     // Clear input and reset height
     el.promptInput.value = '';
