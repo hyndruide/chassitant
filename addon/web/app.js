@@ -74,6 +74,9 @@
     topbarModelText: document.getElementById('topbar-model-text'),
     topbarMcpBadge: document.getElementById('topbar-mcp-badge'),
     topbarMcpText: document.getElementById('topbar-mcp-text'),
+    btnOpenAuth: document.getElementById('btn-open-auth'),
+    topbarAuthDot: document.getElementById('topbar-auth-dot'),
+    topbarAuthLabel: document.getElementById('topbar-auth-label'),
     drawerAuthDot: document.getElementById('drawer-auth-dot'),
     drawerAuthText: document.getElementById('drawer-auth-text'),
     drawerMcpBadge: document.getElementById('drawer-mcp-badge'),
@@ -85,8 +88,8 @@
     selectModel: document.getElementById('select-model'),
     selectEffort: document.getElementById('select-effort'),
     inputTimeout: document.getElementById('input-timeout'),
-    inputGeminiKey: document.getElementById('input-gemini-key'),
-    btnSaveGeminiKey: document.getElementById('btn-save-gemini-key'),
+    btnReloadTerminal: document.getElementById('btn-reload-terminal'),
+    terminalFrame: document.getElementById('terminal-frame'),
     btnCheckAuth: document.getElementById('btn-check-auth'),
     authModalBadge: document.getElementById('auth-modal-badge'),
     authModalDesc: document.getElementById('auth-modal-desc'),
@@ -575,8 +578,11 @@
   // Settings, Auth & MCP Modal
   // ==========================================================================
   function initSettingsModal() {
-    el.btnOpenSettings.addEventListener('click', openSettings);
-    el.btnOpenSettingsDrawer.addEventListener('click', openSettings);
+    el.btnOpenSettings.addEventListener('click', () => openSettings());
+    el.btnOpenSettingsDrawer.addEventListener('click', () => openSettings());
+    if (el.btnOpenAuth) {
+      el.btnOpenAuth.addEventListener('click', () => openSettings('tab-auth'));
+    }
     el.btnCloseModal.addEventListener('click', closeSettings);
     el.settingsModal.addEventListener('click', (e) => {
       if (e.target === el.settingsModal) closeSettings();
@@ -600,7 +606,7 @@
     el.btnSaveSettings.addEventListener('click', () => {
       state.settings.model = el.selectModel.value;
       state.settings.effort = el.selectEffort.value;
-      state.settings.timeout = parseInt(el.inputTimeout.value || '120', 10);
+      state.settings.timeout = parseInt(el.inputTimeout.value || '300', 10);
 
       localStorage.setItem('chassitant_model', state.settings.model);
       localStorage.setItem('chassitant_effort', state.settings.effort);
@@ -611,31 +617,20 @@
     });
 
     // Check Auth button
-    el.btnCheckAuth.addEventListener('click', refreshAuthStatus);
-
-    // Save Gemini Key button
-    el.btnSaveGeminiKey.addEventListener('click', async () => {
-      const key = el.inputGeminiKey.value.trim();
-      if (!key) {
-        alert('Veuillez entrer une clé API Gemini valide.');
-        return;
-      }
-      try {
-        el.btnSaveGeminiKey.disabled = true;
-        el.btnSaveGeminiKey.textContent = 'Enregistrement...';
-        await apiCall('/api/auth/api-key', {
-          method: 'POST',
-          body: JSON.stringify({ api_key: key }),
-        });
-        alert('Clé API Gemini enregistrée avec succès !');
-        await refreshAuthStatus();
-      } catch (err) {
-        alert(`Erreur d'enregistrement : ${err.message}`);
-      } finally {
-        el.btnSaveGeminiKey.disabled = false;
-        el.btnSaveGeminiKey.textContent = 'Enregistrer';
-      }
+    el.btnCheckAuth.addEventListener('click', async () => {
+      el.btnCheckAuth.disabled = true;
+      el.btnCheckAuth.innerHTML = '<span>⏳</span><span>Vérification...</span>';
+      await refreshAuthStatus();
+      el.btnCheckAuth.disabled = false;
+      el.btnCheckAuth.innerHTML = '<span>✅</span><span>Vérifier le statut de connexion</span>';
     });
+
+    // Reload Terminal button
+    if (el.btnReloadTerminal && el.terminalFrame) {
+      el.btnReloadTerminal.addEventListener('click', () => {
+        el.terminalFrame.src = 'terminal/?t=' + Date.now();
+      });
+    }
 
     // Refresh MCP button
     el.btnRefreshMcp.addEventListener('click', async () => {
@@ -654,10 +649,21 @@
     });
   }
 
-  function openSettings() {
+  function openSettings(activeTabId = null) {
     el.selectModel.value = state.settings.model;
     el.selectEffort.value = state.settings.effort;
     el.inputTimeout.value = state.settings.timeout;
+
+    if (activeTabId) {
+      const tabs = el.settingsModal.querySelectorAll('.modal-tab');
+      tabs.forEach((t) => t.classList.remove('active'));
+      el.settingsModal.querySelectorAll('.tab-pane').forEach((p) => p.classList.remove('active'));
+
+      const targetTab = el.settingsModal.querySelector(`.modal-tab[data-tab="${activeTabId}"]`);
+      const targetPane = document.getElementById(activeTabId);
+      if (targetTab) targetTab.classList.add('active');
+      if (targetPane) targetPane.classList.add('active');
+    }
 
     refreshAuthStatus();
     loadMcpServers();
@@ -677,6 +683,14 @@
       const isOk = data.authenticated;
       const msg = data.message || (isOk ? 'Connecté' : 'Non connecté');
 
+      // Update Topbar
+      if (el.topbarAuthDot) {
+        el.topbarAuthDot.className = `status-indicator ${isOk ? 'online' : 'offline'}`;
+      }
+      if (el.topbarAuthLabel) {
+        el.topbarAuthLabel.textContent = isOk ? 'Google Actif' : 'Connexion Google';
+      }
+
       // Update Drawer Pill
       el.drawerAuthDot.className = `status-indicator ${isOk ? 'online' : 'offline'}`;
       el.drawerAuthText.textContent = isOk ? 'Google Actif' : 'Non connecté';
@@ -684,7 +698,9 @@
       // Update Modal
       el.authModalBadge.className = `auth-status-tag ${isOk ? 'ok' : 'ko'}`;
       el.authModalBadge.textContent = isOk ? 'Authentifié' : 'Connexion requise';
-      el.authModalDesc.textContent = msg;
+      el.authModalDesc.textContent = isOk
+        ? 'Votre session Google Antigravity est active et enregistrée de façon permanente.'
+        : 'Session Google inactive. Suivez les instructions dans le terminal Ingress ci-dessous pour vous connecter.';
     } catch (err) {
       console.error('Failed to check auth:', err);
     }

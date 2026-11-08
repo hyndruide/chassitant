@@ -12,6 +12,9 @@ import mimetypes
 import os
 import socket
 import sys
+import threading
+import urllib.error
+import urllib.request
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -165,9 +168,99 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             logger.warning("Error serving static %s: %s", clean_path, err)
             return False
 
+    def proxy_terminal(self) -> None:
+        """Reverse-proxy HTTP and WebSocket requests to ttyd on port 8097."""
+        backend_host = "127.0.0.1"
+        backend_port = 8097
+        clean_path = self.get_clean_path()
+        if "?" in self.path:
+            query = self.path.split("?", 1)[1]
+            clean_path = f"{clean_path}?{query}"
+
+        is_ws = (self.headers.get("Upgrade", "").lower() == "websocket")
+
+        if is_ws:
+            try:
+                backend_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                backend_sock.connect((backend_host, backend_port))
+
+                backend_requestline = f"{self.command} {clean_path} HTTP/1.1\r\n".encode("latin-1")
+                headers_list = []
+                for k, v in self.headers.items():
+                    if k.lower() == "host":
+                        headers_list.append(b"Host: 127.0.0.1:8097\r\n")
+                    else:
+                        headers_list.append(f"{k}: {v}\r\n".encode("latin-1"))
+                backend_sock.sendall(backend_requestline + b"".join(headers_list) + b"\r\n")
+
+                client_sock = self.connection
+
+                def forward(src: socket.socket, dst: socket.socket) -> None:
+                    try:
+                        while True:
+                            data = src.recv(4096)
+                            if not data:
+                                break
+                            dst.sendall(data)
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            dst.close()
+                        except Exception:
+                            pass
+
+                t1 = threading.Thread(target=forward, args=(client_sock, backend_sock), daemon=True)
+                t2 = threading.Thread(target=forward, args=(backend_sock, client_sock), daemon=True)
+                t1.start()
+                t2.start()
+                t1.join()
+                t2.join()
+                self.close_connection = True
+            except Exception as err:
+                logger.error("Terminal WebSocket proxy error: %s", err)
+            return
+
+        # Normal HTTP proxy for ttyd HTML, JS, CSS, token
+        try:
+            backend_url = f"http://{backend_host}:{backend_port}{clean_path}"
+            headers_dict = {k: v for k, v in self.headers.items() if k.lower() not in ("host", "content-length")}
+            body = None
+            if self.command == "POST":
+                content_len = int(self.headers.get("Content-Length", 0))
+                body = self.rfile.read(content_len) if content_len > 0 else None
+
+            req = urllib.request.Request(backend_url, data=body, headers=headers_dict, method=self.command)
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                self.send_response(resp.status)
+                for h, v in resp.getheaders():
+                    if h.lower() not in ("transfer-encoding", "content-length"):
+                        self.send_header(h, v)
+                data = resp.read()
+                self.send_header("Content-Length", str(len(data)))
+                self.end_headers()
+                self.wfile.write(data)
+        except urllib.error.HTTPError as err:
+            self.send_response(err.code)
+            for h, v in err.headers.items():
+                if h.lower() not in ("transfer-encoding", "content-length"):
+                    self.send_header(h, v)
+            err_body = err.read()
+            self.send_header("Content-Length", str(len(err_body)))
+            self.end_headers()
+            self.wfile.write(err_body)
+        except Exception as err:
+            logger.warning("Terminal proxy error for %s: %s", clean_path, err)
+            self.send_json(HTTPStatus.BAD_GATEWAY, {"error": f"Terminal Ingress non disponible ({err})"})
+
     def do_GET(self) -> None:
         """Handle GET requests."""
         path = self.get_clean_path()
+
+        # Terminal proxy route
+        if path.startswith("/terminal"):
+            self.proxy_terminal()
+            return
 
         # 1. API Conversations list
         if path == "/api/conversations":
@@ -249,6 +342,12 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         """Handle POST requests."""
         path = self.get_clean_path()
+
+        # Terminal proxy route
+        if path.startswith("/terminal"):
+            self.proxy_terminal()
+            return
+
         payload = self.read_json_body()
         if payload is None:
             self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "JSON invalide"})

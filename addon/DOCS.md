@@ -18,10 +18,10 @@ Le module complémentaire **Chassitant** transforme Home Assistant en un hub d'i
    - Connecté automatiquement à votre serveur Home Assistant via le jeton de sécurité Supervisor (`SUPERVISOR_TOKEN`).
    - L'IA a immédiatement accès aux ~80+ outils pour contrôler les appareils, interroger les états, analyser la consommation et créer des cartes Lovelace.
 
-3. **Gestion de l'authentification dans l'interface** :
-   - Statut en direct dans la fenêtre de Paramètres (icône ⚙️).
-   - Possibilité de renseigner directement une clé API Google Gemini (`AIza...`) pour une utilisation immédiate et permanente sans expiration.
-   - Ou connexion Google OAuth interactive.
+3. **Connexion Google 100% Ingress (Zéro clé API requise)** :
+   - Statut en direct dans la barre supérieure et le Drawer.
+   - Terminal interactif Google intégré directement dans l'interface Ingress : ouvrez simplement le lien d'autorisation Google affiché, validez avec votre compte Google et collez le code directement dans le terminal.
+   - Vos identifiants sont sauvegardés de manière permanente dans `/data/.gemini/antigravity-cli/`.
 
 4. **Compatibilité totale avec Home Assistant Assist** :
    - Serveur Bridge multi-thread actif sur le port interne `8099`.
@@ -29,12 +29,14 @@ Le module complémentaire **Chassitant** transforme Home Assistant en un hub d'i
 
 ---
 
-## 🚀 Mise en route rapide (En 2 minutes)
+## 🚀 Mise en route rapide
 
-1. Après l'installation ou la mise à jour de l'Add-on, cliquez sur **Chassitant** dans le menu latéral gauche.
-2. Si vous n'êtes pas encore connecté, ouvrez **Paramètres (⚙️)** :
-   - Entrez votre clé API Google Gemini (disponible gratuitement sur [Google AI Studio](https://aistudio.google.com/app/apikey)) puis cliquez sur **Enregistrer**.
-3. Vos discussions sont automatiquement sauvegardées dans `/data/conversations.json` et persistent même après redémarrage ou mise à jour de l'Add-on.
+1. Cliquez sur **Chassitant** dans le menu latéral gauche de Home Assistant.
+2. Si vous n'êtes pas encore connecté, cliquez sur **Google Auth** dans la barre supérieure :
+   - Le terminal interactif Ingress s'affiche.
+   - Ouvrez l'URL de connexion Google affichée, autorisez votre compte Google et copiez le code.
+   - Collez le code dans le terminal et appuyez sur **Entrée**.
+3. Vos discussions sont automatiquement sauvegardées dans `/data/conversations.json` et persistent après redémarrage ou mise à jour.
 
 ---
 

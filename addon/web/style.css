@@ -869,8 +869,8 @@ html, body {
   border: 1px solid var(--border-color);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 620px;
-  max-height: 85vh;
+  max-width: 780px;
+  max-height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow-lg);

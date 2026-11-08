@@ -70,6 +70,10 @@
         </div>
 
         <div class="topbar-right">
+          <button id="btn-open-auth" class="badge-tag" style="cursor: pointer; background: transparent; border: 1px solid var(--border-color);" title="Connexion Google">
+            <span id="topbar-auth-dot" class="status-indicator offline" style="margin: 0;"></span>
+            <span id="topbar-auth-label">Google Auth</span>
+          </button>
           <div id="topbar-mcp-badge" class="badge-tag highlight" title="Statut du serveur MCP Home Assistant">
             <span>🔌</span>
             <span id="topbar-mcp-text">MCP HA Actif</span>
@@ -78,7 +82,7 @@
             <span>✨</span>
             <span id="topbar-model-text">Gemini 3.8 Flash</span>
           </div>
-          <button id="btn-open-settings" class="btn-topbar-action" title="Paramètres, Authentification et MCP">
+          <button id="btn-open-settings" class="btn-topbar-action" title="Paramètres et Outils MCP">
             ⚙️
           </button>
         </div>
@@ -168,7 +172,7 @@
       </div>
 
       <div class="modal-body">
-        <!-- Tab 1: Auth & Google -->
+        <!-- Tab 1: Auth & Google (Terminal Ingress) -->
         <div id="tab-auth" class="tab-pane active">
           <div class="auth-card">
             <div class="auth-header">
@@ -176,28 +180,29 @@
               <span id="auth-modal-badge" class="auth-status-tag ko">Vérification...</span>
             </div>
             <p id="auth-modal-desc" class="form-help">
-              Détection de la session en cours...
+              Connectez-vous directement avec votre compte Google via le terminal interactif Ingress ci-dessous. Dès que la session est validée, vos identifiants sont sauvegardés de manière permanente.
             </p>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Clé API Google Gemini (Recommandé si pas d'OAuth)</label>
-            <div style="display: flex; gap: 8px;">
-              <input type="password" id="input-gemini-key" class="form-input" style="flex:1;" placeholder="AIzaSy..." />
-              <button id="btn-save-gemini-key" class="btn-primary" style="white-space: nowrap;">Enregistrer</button>
+          <div class="form-group" style="margin-top: 4px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+              <label class="form-label" style="margin: 0;">🖥️ Terminal de Connexion Google (Ingress)</label>
+              <button id="btn-reload-terminal" class="btn-secondary" style="font-size: 11px; padding: 3px 8px;">
+                🔄 Relancer le terminal
+              </button>
+            </div>
+            <div class="terminal-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; background: #121417;">
+              <iframe id="terminal-frame" src="terminal/" style="width: 100%; height: 380px; border: none; display: block;"></iframe>
             </div>
             <span class="form-help">
-              Vous pouvez obtenir une clé gratuite sur <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noopener">Google AI Studio</a> pour une authentification immédiate et sans expiration.
+              👉 <strong>Comment faire :</strong> Dans le terminal ci-dessus, ouvrez le lien Google affiché, autorisez votre compte Google, puis collez le code d'autorisation directement dans le terminal et appuyez sur Entrée.
             </span>
           </div>
 
-          <div class="form-group">
-            <label class="form-label">Session Google OAuth interactive</label>
-            <p class="form-help">
-              Si vous préférez utiliser votre compte Google via OAuth, vous pouvez initialiser la connexion dans le terminal embarqué de l'Add-on.
-            </p>
-            <button id="btn-check-auth" class="btn-secondary" style="align-self: flex-start;">
-              🔄 Revérifier le statut de connexion
+          <div style="display: flex; gap: 10px; align-items: center; justify-content: flex-end;">
+            <button id="btn-check-auth" class="btn-primary" style="display: flex; align-items: center; gap: 6px;">
+              <span>✅</span>
+              <span>Vérifier le statut de connexion</span>
             </button>
           </div>
         </div>
