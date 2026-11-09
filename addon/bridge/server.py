@@ -363,7 +363,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.5.0",
+                    "version": "1.5.1",
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
                     "agy_authenticated": auth_ok,
@@ -792,7 +792,6 @@ def main() -> None:
     server_bridge = None
     if bridge_port != ingress_port:
         try:
-            import threading
             server_bridge = ChassitantBridgeServer((host, bridge_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir, turn_mgr, ha_indexer)
             threading.Thread(target=server_bridge.serve_forever, daemon=True).start()
             print(f"🚀 Serveur Assist Bridge (Core API)  : http://{host}:{bridge_port}", flush=True)
