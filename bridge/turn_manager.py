@@ -160,6 +160,7 @@ class TurnManager:
         model: Optional[str] = None,
         effort: Optional[str] = None,
         timeout: int = 300,
+        pre_prompt: Optional[str] = None,
     ) -> ActiveTurn:
         """Start a new background turn for a conversation."""
         with self._lock:
@@ -172,7 +173,7 @@ class TurnManager:
 
         thread = threading.Thread(
             target=self._run_worker,
-            args=(turn, agy_client, conv_store, conv_id, prompt, model, effort, timeout),
+            args=(turn, agy_client, conv_store, conv_id, prompt, model, effort, timeout, pre_prompt),
             daemon=True,
             name=f"TurnWorker-{conv_id[:8]}",
         )
@@ -189,10 +190,18 @@ class TurnManager:
         model: Optional[str],
         effort: Optional[str],
         timeout: int,
+        pre_prompt: Optional[str] = None,
     ) -> None:
         """Worker thread executing the turn via agy stream."""
         conv = conv_store.get_conversation(conv_id)
         target_agy_id = conv.get("agy_conversation_id") if conv else None
+
+        # Inject pre-prompt on first turn of conversation or when starting
+        effective_prompt = prompt
+        if pre_prompt and pre_prompt.strip() and (target_agy_id is None or len(conv.get("messages", [])) <= 1):
+            effective_prompt = f"[Consignes système / Pré-prompt de l'utilisateur : {pre_prompt.strip()}]\n\n{prompt}"
+            logger.info("Injected pre-prompt for first turn of conversation %s", conv_id)
+
         logger.info("Turn worker started for conv %s (agy_id=%s): '%s...'", conv_id, target_agy_id, prompt[:40])
         steps_log: List[Dict[str, Any]] = []
         full_text = ""
@@ -201,7 +210,7 @@ class TurnManager:
 
         try:
             for event in agy_client.process_stream(
-                prompt=prompt,
+                prompt=effective_prompt,
                 conversation_id=target_agy_id,
                 model=model,
                 effort=effort,

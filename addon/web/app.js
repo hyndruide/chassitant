@@ -56,6 +56,7 @@
         return eff;
       })(),
       timeout: parseInt(localStorage.getItem('chassitant_timeout') || '300', 10),
+      prePrompt: localStorage.getItem('chassitant_pre_prompt') || '',
     },
     authStatus: { authenticated: false, message: '' },
     mcpServers: [],
@@ -107,6 +108,7 @@
     selectModel: document.getElementById('select-model'),
     selectEffort: document.getElementById('select-effort'),
     inputTimeout: document.getElementById('input-timeout'),
+    inputPrePrompt: document.getElementById('input-pre-prompt'),
     btnReloadTerminal: document.getElementById('btn-reload-terminal'),
     terminalFrame: document.getElementById('terminal-frame'),
     btnCheckAuth: document.getElementById('btn-check-auth'),
@@ -956,6 +958,7 @@
           model: state.settings.model,
           effort: state.settings.effort,
           timeout: state.settings.timeout,
+          pre_prompt: state.settings.prePrompt,
           stream: true,
         }),
       });
@@ -1283,10 +1286,26 @@
     });
 
     // Save Settings
-    el.btnSaveSettings.addEventListener('click', () => {
+    el.btnSaveSettings.addEventListener('click', async () => {
       state.settings.model = el.selectModel.value;
       state.settings.effort = el.selectEffort.value;
       state.settings.timeout = parseInt(el.inputTimeout.value || '300', 10);
+      if (el.inputPrePrompt) {
+        state.settings.prePrompt = el.inputPrePrompt.value.trim();
+        localStorage.setItem('chassitant_pre_prompt', state.settings.prePrompt);
+        try {
+          await apiCall('/api/settings', {
+            method: 'POST',
+            body: JSON.stringify({
+              pre_prompt: state.settings.prePrompt,
+              model: state.settings.model,
+              effort: state.settings.effort,
+            }),
+          });
+        } catch (e) {
+          console.debug('Failed to sync settings to server:', e);
+        }
+      }
 
       localStorage.setItem('chassitant_model', state.settings.model);
       localStorage.setItem('chassitant_effort', state.settings.effort);
@@ -1371,6 +1390,9 @@
     el.selectModel.value = state.settings.model;
     el.selectEffort.value = state.settings.effort;
     el.inputTimeout.value = state.settings.timeout;
+    if (el.inputPrePrompt) {
+      el.inputPrePrompt.value = state.settings.prePrompt || '';
+    }
 
     if (activeTabId) {
       const tabs = el.settingsModal.querySelectorAll('.modal-tab');
@@ -1823,6 +1845,15 @@
     initSettingsModal();
     initEventListeners();
     updateModelBadges();
+
+    try {
+      const serverSettings = await apiCall('/api/settings');
+      if (serverSettings && serverSettings.pre_prompt && !localStorage.getItem('chassitant_pre_prompt')) {
+        state.settings.prePrompt = serverSettings.pre_prompt;
+      }
+    } catch (e) {
+      // Optional settings fetch
+    }
 
     await loadConversations();
     refreshAuthStatus();

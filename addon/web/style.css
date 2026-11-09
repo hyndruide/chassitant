@@ -1059,7 +1059,7 @@ html, body {
   letter-spacing: 0.5px;
 }
 
-.form-input, .form-select {
+.form-input, .form-select, .form-textarea {
   padding: 9px 12px;
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -1068,9 +1068,18 @@ html, body {
   font-size: 13.5px;
   outline: none;
   transition: border-color var(--transition-fast);
+  font-family: inherit;
 }
 
-.form-input:focus, .form-select:focus {
+.form-textarea {
+  resize: vertical;
+  min-height: 85px;
+  line-height: 1.5;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.form-input:focus, .form-select:focus, .form-textarea:focus {
   border-color: var(--accent-color);
 }
 

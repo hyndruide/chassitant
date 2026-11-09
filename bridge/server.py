@@ -363,13 +363,28 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.5.2",
+                    "version": "1.6.0",
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
                     "agy_authenticated": auth_ok,
                     "agy_status_message": auth_msg,
                     "mcp_servers": mcps,
                     "models_count": len(models),
+                },
+            )
+            return
+
+        # Settings endpoint
+        if path == "/api/settings":
+            if not self.check_authorization():
+                return
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "pre_prompt": self.auth_manager.get_pre_prompt(),
+                    "model": self.auth_manager.get_default_model(),
+                    "effort": self.auth_manager.get_default_effort(),
                 },
             )
             return
@@ -467,6 +482,27 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "JSON invalide"})
             return
 
+        # 0. Settings update endpoint
+        if path == "/api/settings":
+            if not self.check_authorization():
+                return
+            if "pre_prompt" in payload:
+                self.auth_manager.set_pre_prompt(str(payload.get("pre_prompt", "")))
+            if "model" in payload and payload.get("model"):
+                self.auth_manager.set_default_model(str(payload["model"]))
+            if "effort" in payload and payload.get("effort"):
+                self.auth_manager.set_default_effort(str(payload["effort"]))
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "pre_prompt": self.auth_manager.get_pre_prompt(),
+                    "model": self.auth_manager.get_default_model(),
+                    "effort": self.auth_manager.get_default_effort(),
+                },
+            )
+            return
+
         # 1. Create new conversation
         if path == "/api/conversations":
             if not self.check_authorization():
@@ -493,13 +529,20 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             effort = payload.get("effort")
             timeout = int(payload.get("timeout", 300))
             stream_mode = payload.get("stream", True)
+            pre_prompt = payload.get("pre_prompt")
+            if pre_prompt is None:
+                pre_prompt = self.auth_manager.get_pre_prompt()
 
             if not stream_mode:
                 conv = self.conv_store.get_conversation(conv_id)
                 target_agy_id = conv.get("agy_conversation_id") if conv else None
+                sync_prompt = prompt
+                if pre_prompt and pre_prompt.strip() and (target_agy_id is None or len(conv.get("messages", [])) <= 1):
+                    sync_prompt = f"[Consignes système / Pré-prompt de l'utilisateur : {pre_prompt.strip()}]\n\n{prompt}"
+
                 logger.info("Executing agy sync turn for conversation %s (agy_id=%s): '%s...'", conv_id, target_agy_id, prompt[:40])
                 result = self.agy_client.process(
-                    prompt=prompt,
+                    prompt=sync_prompt,
                     conversation_id=target_agy_id,
                     model=model,
                     effort=effort,
@@ -551,6 +594,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 model=model,
                 effort=effort,
                 timeout=timeout,
+                pre_prompt=pre_prompt,
             )
 
             # Stream live events to this client (turn continues in background if client leaves)
@@ -638,9 +682,13 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             model = payload.get("model")
             effort = payload.get("effort")
             timeout = int(payload.get("timeout", 300))
+            pre_prompt = payload.get("system_prompt") or self.auth_manager.get_pre_prompt()
+            effective_prompt = prompt
+            if pre_prompt and pre_prompt.strip() and not conv_id:
+                effective_prompt = f"[Consignes système : {pre_prompt.strip()}]\n\n{prompt}"
 
             res = self.agy_client.process(
-                prompt=prompt,
+                prompt=effective_prompt,
                 conversation_id=conv_id,
                 model=model,
                 effort=effort,

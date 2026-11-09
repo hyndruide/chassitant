@@ -349,12 +349,18 @@
             <input type="number" id="input-timeout" class="form-input" value="300" min="60" max="900" />
             <span class="form-help">Temps maximal alloué à l'IA pour réfléchir et appeler les outils Home Assistant (recommandé: 300s).</span>
           </div>
+
+          <div class="form-group">
+            <label class="form-label">Pré-prompt / Consignes personnalisées</label>
+            <textarea id="input-pre-prompt" class="form-textarea" rows="4" placeholder="Ex: Réponds toujours de façon concise en français. Tutoyez-moi. Priorise les cartes Lovelace modernes de type tile ou mushroom..."></textarea>
+            <span class="form-help">Ces consignes seront automatiquement transmises à l'IA pour personnaliser son comportement et ses réponses.</span>
+          </div>
         </div>
 
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Chassitant v1.5.2</h3>
+            <h3>Chassitant v1.6.0</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

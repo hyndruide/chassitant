@@ -82,6 +82,42 @@ class AuthManager:
         """Return the active API key."""
         return self._config.get("api_key", "")
 
+    def get_pre_prompt(self) -> str:
+        """Return configured pre-prompt / system instructions if any."""
+        options_path = Path("/data/options.json")
+        if options_path.exists():
+            try:
+                with open(options_path, "r", encoding="utf-8") as f:
+                    ha_opts = json.load(f)
+                    if ha_opts.get("pre_prompt"):
+                        return ha_opts["pre_prompt"].strip()
+            except Exception:
+                pass
+        return self._config.get("pre_prompt", "").strip()
+
+    def set_pre_prompt(self, pre_prompt: str) -> None:
+        """Store pre-prompt / system prompt."""
+        self._config["pre_prompt"] = pre_prompt.strip()
+        self.save_config()
+
+    def get_default_model(self) -> str:
+        """Return configured default model."""
+        return self._config.get("default_model", "default")
+
+    def set_default_model(self, model: str) -> None:
+        """Store default model."""
+        self._config["default_model"] = model.strip()
+        self.save_config()
+
+    def get_default_effort(self) -> str:
+        """Return configured default reasoning effort."""
+        return self._config.get("default_effort", "low")
+
+    def set_default_effort(self, effort: str) -> None:
+        """Store default reasoning effort."""
+        self._config["default_effort"] = effort.strip()
+        self.save_config()
+
     def validate_token(self, token: Optional[str]) -> bool:
         """Verify if a provided Bearer token matches the configured API key."""
         if not token:
