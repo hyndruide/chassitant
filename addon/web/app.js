@@ -1554,12 +1554,6 @@
     });
   }
 
-    refreshAuthStatus();
-    loadMcpServers();
-
-    el.settingsModal.classList.add('active');
-  }
-
   function closeSettings() {
     el.settingsModal.classList.remove('active');
   }

@@ -1,7 +1,7 @@
 name: "Chassitant (Antigravity agy)"
 slug: "chassitant_agy"
 description: "Chatbot IA avec Drawer rétractable, Guide contextuel & raccourcis HA_CONTEXT.md, Google Antigravity agy et serveur MCP Home Assistant pré-embarqué."
-version: "1.5.1"
+version: "1.5.2"
 startup: application
 boot: auto
 init: false
