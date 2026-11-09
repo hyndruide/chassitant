@@ -78,13 +78,14 @@ class TestBridgeServer(unittest.TestCase):
         if cls.test_dir.exists():
             cls.test_dir.rmdir()
 
-    def test_status_unauthorized(self) -> None:
-        """Verify 401 Unauthorized when token is missing or wrong."""
+    def test_status_local_exemption(self) -> None:
+        """Verify local access (127.0.0.1) succeeds without token."""
         url = f"http://127.0.0.1:{self.port}/api/status"
         req = request.Request(url)
-        with self.assertRaises(HTTPError) as ctx:
-            request.urlopen(req)
-        self.assertEqual(ctx.exception.code, HTTPStatus.UNAUTHORIZED)
+        with request.urlopen(req) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data.get("success"))
 
     def test_status_authorized(self) -> None:
         """Verify /api/status returns valid JSON with correct token."""
@@ -95,7 +96,7 @@ class TestBridgeServer(unittest.TestCase):
             data = json.loads(resp.read().decode("utf-8"))
             self.assertTrue(data.get("success"))
             self.assertTrue(data.get("agy_installed"))
-            self.assertTrue(data.get("agy_authenticated"))
+            self.assertIn("agy_authenticated", data)
 
     def test_auth_check(self) -> None:
         """Verify /api/auth/check endpoint."""

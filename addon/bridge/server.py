@@ -724,18 +724,18 @@ class ChassitantBridgeServer(ThreadingHTTPServer):
         server_address: tuple[str, int],
         auth_manager: AuthManager,
         agy_client: AgyClient,
-        conv_store: ConversationStore,
-        mcp_manager: McpManager,
-        web_dir: Path,
+        conv_store: Optional[ConversationStore] = None,
+        mcp_manager: Optional[McpManager] = None,
+        web_dir: Optional[Path] = None,
         turn_manager: Optional[TurnManager] = None,
         ha_indexer: Optional[HaIndexer] = None,
     ) -> None:
         super().__init__(server_address, ChassitantRequestHandler)
         self.auth_manager = auth_manager
         self.agy_client = agy_client
-        self.conv_store = conv_store
-        self.mcp_manager = mcp_manager
-        self.web_dir = web_dir
+        self.conv_store = conv_store or ConversationStore()
+        self.mcp_manager = mcp_manager or McpManager()
+        self.web_dir = web_dir or (Path(__file__).resolve().parent.parent / "addon" / "web")
         self.turn_manager = turn_manager or TurnManager()
         self.ha_indexer = ha_indexer or HaIndexer()
 

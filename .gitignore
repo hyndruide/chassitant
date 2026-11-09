@@ -8,6 +8,9 @@ chassitant_config.json
 .env
 *.token
 *.key
+HA_CONTEXT.md
+ha_inventory.json
+/data/
 
 # Logs
 *.log
