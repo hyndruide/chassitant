@@ -4,6 +4,15 @@ Ce système est connecté à une instance Home Assistant via le serveur MCP `hom
 
 ## RÈGLES CRITIQUES D'OPTIMISATION ET D'ACCÈS AUX DONNÉES
 
+### 0. PRIORITÉ ABSOLUE : UTILISATION IMMÉDIATE DU GUIDE `HA_CONTEXT.md`
+- Le fichier `HA_CONTEXT.md` présent dans le répertoire de travail contient l'inventaire exhaustif et pré-indexé des entités clés de la maison (Météo, Radiateurs/Climats, Températures d'ambiance par pièce, Consommation de chauffage active, Volets, Lumières) avec leurs `entity_id` réels et leurs modèles de cartes Lovelace.
+- **SI L'ÉQUIPEMENT DEMANDÉ FIGURE DANS `HA_CONTEXT.md`, IL EST STRICTEMENT INTERDIT D'APPELER `ha_search` !**
+- Utilisez DIRECTEMENT les `entity_id` exacts du guide.
+- Pour créer une page ou une carte demandée (ex: météo, température, consommation, volets) :
+  Passez DIRECTEMENT à l'écriture sans recherche :
+  `ha_config_get_dashboard(url_path="lovelace")` -> `ha_config_set_dashboard(...)`.
+  L'exécution doit être instantanée (< 5 secondes).
+
 ### 1. INTERDICTION FORMELLE DE `ha_get_overview`
 - **NE JAMAIS** appeler `ha_get_overview` pour répondre à une question ponctuelle, rechercher des appareils ou créer une carte. Cet appel extrait l'intégralité du système Home Assistant (plus de 1000 entités avec tous leurs attributs), produit un dump massif (> 100 000 tokens), sature la mémoire du modèle et entraîne des timeouts.
 - `ha_get_overview` est STRICTEMENT réservé au cas où l'utilisateur demande explicitement un audit ou un inventaire global de toute la maison (ex : *"Donne-moi l'inventaire complet de tout mon Home Assistant"*).

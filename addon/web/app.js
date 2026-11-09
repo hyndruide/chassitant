@@ -121,6 +121,20 @@
     mcpFeedbackBanner: document.getElementById('mcp-feedback-banner'),
     mcpToolsCountBadge: document.getElementById('mcp-tools-count-badge'),
     mcpServersList: document.getElementById('mcp-servers-list'),
+    btnOpenInventoryDrawer: document.getElementById('btn-open-inventory-drawer'),
+    btnRescanInventory: document.getElementById('btn-rescan-inventory'),
+    rescanIcon: document.getElementById('rescan-icon'),
+    rescanSpinner: document.getElementById('rescan-spinner'),
+    rescanText: document.getElementById('rescan-text'),
+    inventoryLastScan: document.getElementById('inventory-last-scan'),
+    inventorySearch: document.getElementById('inventory-search'),
+    inventoryTableContainer: document.getElementById('inventory-table-container'),
+    countWeather: document.getElementById('count-weather'),
+    countClimates: document.getElementById('count-climates'),
+    countTemps: document.getElementById('count-temps'),
+    countEnergy: document.getElementById('count-energy'),
+    countCovers: document.getElementById('count-covers'),
+    countLights: document.getElementById('count-lights'),
   };
 
   // Configure marked if available
@@ -1235,6 +1249,17 @@
     if (el.btnDrawerMcp) {
       el.btnDrawerMcp.addEventListener('click', () => openSettings('tab-mcp'));
     }
+    if (el.btnOpenInventoryDrawer) {
+      el.btnOpenInventoryDrawer.addEventListener('click', () => openSettings('tab-inventory'));
+    }
+    if (el.btnRescanInventory) {
+      el.btnRescanInventory.addEventListener('click', rescanInventory);
+    }
+    if (el.inventorySearch) {
+      el.inventorySearch.addEventListener('input', () => {
+        renderInventoryTable(el.inventorySearch.value.trim().toLowerCase());
+      });
+    }
     el.btnCloseModal.addEventListener('click', closeSettings);
     el.settingsModal.addEventListener('click', (e) => {
       if (e.target === el.settingsModal) closeSettings();
@@ -1251,6 +1276,9 @@
         const targetId = tab.dataset.tab;
         const pane = document.getElementById(targetId);
         if (pane) pane.classList.add('active');
+        if (targetId === 'tab-inventory') {
+          loadInventory();
+        }
       });
     });
 
@@ -1353,7 +1381,178 @@
       const targetPane = document.getElementById(activeTabId);
       if (targetTab) targetTab.classList.add('active');
       if (targetPane) targetPane.classList.add('active');
+
+      if (activeTabId === 'tab-inventory') {
+        loadInventory();
+      }
     }
+
+    refreshAuthStatus();
+    loadMcpServers();
+
+    el.settingsModal.classList.add('active');
+  }
+
+  // ==========================================================================
+  // Home Assistant Inventory & Cheat Sheet Management
+  // ==========================================================================
+  let cachedInventory = null;
+
+  async function loadInventory() {
+    if (!el.inventoryTableContainer) return;
+    try {
+      const res = await apiCall('/api/inventory');
+      if (res && res.inventory) {
+        cachedInventory = res.inventory;
+        updateInventoryCounts(res.counts || {});
+        if (el.inventoryLastScan) {
+          el.inventoryLastScan.textContent = formatScanDate(res.scanned_at || res.inventory.scanned_at);
+        }
+        renderInventoryTable(el.inventorySearch ? el.inventorySearch.value.trim().toLowerCase() : '');
+      }
+    } catch (err) {
+      console.warn('loadInventory error:', err);
+      if (el.inventoryTableContainer) {
+        el.inventoryTableContainer.innerHTML = `<div style="text-align: center; color: var(--accent-danger); padding: 20px;">Erreur de chargement : ${escapeHtml(err.message)}</div>`;
+      }
+    }
+  }
+
+  async function rescanInventory() {
+    if (!el.btnRescanInventory) return;
+    try {
+      el.btnRescanInventory.disabled = true;
+      if (el.rescanSpinner) el.rescanSpinner.style.display = 'inline-block';
+      if (el.rescanIcon) el.rescanIcon.style.display = 'none';
+      if (el.rescanText) el.rescanText.textContent = 'Scan en cours...';
+
+      const res = await apiCall('/api/inventory/scan', {
+        method: 'POST',
+        body: JSON.stringify({}),
+      });
+
+      if (res && res.inventory) {
+        cachedInventory = res.inventory;
+        updateInventoryCounts(res.counts || {});
+        if (el.inventoryLastScan) {
+          el.inventoryLastScan.textContent = formatScanDate(res.scanned_at);
+        }
+        renderInventoryTable(el.inventorySearch ? el.inventorySearch.value.trim().toLowerCase() : '');
+      }
+    } catch (err) {
+      alert(`Erreur lors du scan : ${err.message}`);
+    } finally {
+      el.btnRescanInventory.disabled = false;
+      if (el.rescanSpinner) el.rescanSpinner.style.display = 'none';
+      if (el.rescanIcon) el.rescanIcon.style.display = 'inline-block';
+      if (el.rescanText) el.rescanText.textContent = 'Actualiser l\'inventaire';
+    }
+  }
+
+  function updateInventoryCounts(counts) {
+    if (el.countWeather) el.countWeather.textContent = counts.weather || 0;
+    if (el.countClimates) el.countClimates.textContent = counts.climates || 0;
+    if (el.countTemps) el.countTemps.textContent = counts.temperatures || 0;
+    if (el.countEnergy) el.countEnergy.textContent = counts.energy_heating || 0;
+    if (el.countCovers) el.countCovers.textContent = counts.covers || 0;
+    if (el.countLights) el.countLights.textContent = counts.lights || 0;
+  }
+
+  function formatScanDate(isoStr) {
+    if (!isoStr) return 'Non disponible';
+    try {
+      const d = new Date(isoStr);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' (' + d.toLocaleDateString() + ')';
+    } catch (_) {
+      return isoStr;
+    }
+  }
+
+  function renderInventoryTable(filterText = '') {
+    if (!el.inventoryTableContainer) return;
+    if (!cachedInventory) {
+      el.inventoryTableContainer.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 20px;">Aucune donnée disponible. Cliquez sur Actualiser.</div>';
+      return;
+    }
+
+    const sections = [
+      { key: 'weather', title: 'Météo', tagClass: 'weather' },
+      { key: 'climates', title: 'Chauffage & Clim', tagClass: 'climate' },
+      { key: 'temperatures', title: 'Températures', tagClass: 'sensor' },
+      { key: 'energy_heating', title: 'Énergie & Conso Chauffage', tagClass: 'sensor' },
+      { key: 'covers', title: 'Volets & Stores', tagClass: 'cover' },
+      { key: 'lights', title: 'Éclairages', tagClass: 'light' },
+    ];
+
+    let rowsHtml = '';
+    let totalDisplayed = 0;
+
+    sections.forEach((sec) => {
+      const list = cachedInventory[sec.key] || [];
+      const filtered = list.filter((item) => {
+        if (!filterText) return true;
+        const q = filterText.toLowerCase();
+        return (
+          item.name.toLowerCase().includes(q) ||
+          item.entity_id.toLowerCase().includes(q) ||
+          (item.state && item.state.toLowerCase().includes(q))
+        );
+      });
+
+      if (filtered.length > 0) {
+        filtered.forEach((item) => {
+          totalDisplayed++;
+          const stateDisplay = item.unit ? `${item.state} ${item.unit}` : item.state;
+          const statusIcon = item.is_active ? '🟢' : '⚪';
+          rowsHtml += `
+            <tr>
+              <td><span class="inv-domain-tag ${sec.tagClass}">${sec.tagClass}</span></td>
+              <td><strong>${escapeHtml(item.name)}</strong></td>
+              <td>
+                <code style="font-size: 11px; background: rgba(0,0,0,0.25); padding: 2px 4px; border-radius: 3px;">${escapeHtml(item.entity_id)}</code>
+                <button class="btn-copy-sm" data-copy="${escapeHtml(item.entity_id)}" title="Copier l'identifiant">📋</button>
+              </td>
+              <td style="white-space: nowrap;">${statusIcon} ${escapeHtml(stateDisplay)}</td>
+            </tr>
+          `;
+        });
+      }
+    });
+
+    if (totalDisplayed === 0) {
+      el.inventoryTableContainer.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 24px;">Aucun équipement ne correspond à "${escapeHtml(filterText)}"</div>`;
+      return;
+    }
+
+    el.inventoryTableContainer.innerHTML = `
+      <table class="inv-table">
+        <thead>
+          <tr>
+            <th style="width: 70px;">Type</th>
+            <th>Nom Équipement</th>
+            <th>Entity ID</th>
+            <th style="width: 130px;">État / Valeur</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+
+    // Attach copy listeners
+    el.inventoryTableContainer.querySelectorAll('.btn-copy-sm').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const text = btn.dataset.copy;
+        if (text) {
+          navigator.clipboard.writeText(text);
+          const orig = btn.textContent;
+          btn.textContent = '✓';
+          setTimeout(() => (btn.textContent = orig), 1500);
+        }
+      });
+    });
+  }
 
     refreshAuthStatus();
     loadMcpServers();

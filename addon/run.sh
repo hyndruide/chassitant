@@ -40,6 +40,10 @@ if [ -f /app/GEMINI.md ]; then
     cp -f /app/GEMINI.md /root/GEMINI.md 2>/dev/null || true
     cp -f /app/GEMINI.md /data/GEMINI.md 2>/dev/null || true
 fi
+if [ -f /data/HA_CONTEXT.md ]; then
+    cp -f /data/HA_CONTEXT.md /app/HA_CONTEXT.md 2>/dev/null || true
+    cp -f /data/HA_CONTEXT.md /root/HA_CONTEXT.md 2>/dev/null || true
+fi
 
 export HOME="/root"
 export PATH="/usr/local/bin:/root/.local/bin:/root/bin:$PATH"

@@ -53,6 +53,10 @@
             <span id="drawer-mcp-text">MCP</span>
           </button>
         </div>
+        <button id="btn-open-inventory-drawer" class="btn-footer" title="Consulter l'inventaire et les raccourcis de la maison">
+          <span>🏠</span>
+          <span>Données & Raccourcis HA</span>
+        </button>
         <button id="btn-open-settings-drawer" class="btn-footer">
           <span>⚙️</span>
           <span>Paramètres & Outils</span>
@@ -176,6 +180,7 @@
 
       <div class="modal-tabs">
         <button class="modal-tab active" data-tab="tab-auth">Google & Auth</button>
+        <button class="modal-tab" data-tab="tab-inventory">Données & Raccourcis HA</button>
         <button class="modal-tab" data-tab="tab-mcp">Outils MCP Home Assistant</button>
         <button class="modal-tab" data-tab="tab-model">Modèle & Options</button>
         <button class="modal-tab" data-tab="tab-about">À propos</button>
@@ -214,6 +219,50 @@
               <span>✅</span>
               <span>Vérifier le statut de connexion</span>
             </button>
+          </div>
+        </div>
+
+        <!-- Tab: Inventory & Knowledge HA -->
+        <div id="tab-inventory" class="tab-pane">
+          <div class="auth-card" style="margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px;">
+              <div>
+                <strong style="font-size: 14px;">🏠 Guide des Équipements & Raccourcis de la Maison</strong>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                  Dernier scan : <span id="inventory-last-scan" style="font-weight: 600; color: var(--text-primary);">Chargement...</span>
+                </div>
+              </div>
+              <button id="btn-rescan-inventory" class="btn-primary" style="display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px;">
+                <span id="rescan-spinner" style="display: none;" class="reasoning-spinner"></span>
+                <span id="rescan-icon">🔄</span>
+                <span id="rescan-text">Actualiser l'inventaire</span>
+              </button>
+            </div>
+            <p class="form-help" style="margin-top: 8px;">
+              Ces données sont pré-indexées dans <code>HA_CONTEXT.md</code> pour permettre à Gemini de connaître instantanément vos équipements sans faire de recherches répétitives (< 5s par action).
+            </p>
+          </div>
+
+          <!-- Summary Badges Pills -->
+          <div class="inventory-pills" id="inventory-pills">
+            <span class="inv-pill">🌤️ Météo : <strong id="count-weather">0</strong></span>
+            <span class="inv-pill">🌡️ Chauffage & Clim : <strong id="count-climates">0</strong></span>
+            <span class="inv-pill">🌡️ Températures : <strong id="count-temps">0</strong></span>
+            <span class="inv-pill">⚡ Énergie & Conso : <strong id="count-energy">0</strong></span>
+            <span class="inv-pill">🪟 Volets : <strong id="count-covers">0</strong></span>
+            <span class="inv-pill">💡 Lumières : <strong id="count-lights">0</strong></span>
+          </div>
+
+          <!-- Search Filter -->
+          <div style="margin: 12px 0;">
+            <input type="text" id="inventory-search" class="search-input" placeholder="🔍 Filtrer un équipement, une pièce, une entité..." style="width: 100%;" />
+          </div>
+
+          <!-- Interactive Table Container -->
+          <div id="inventory-table-container" class="inventory-table-container">
+            <div style="text-align: center; color: var(--text-muted); padding: 30px 0; font-size: 12px;">
+              Chargement de l'inventaire...
+            </div>
           </div>
         </div>
 
@@ -305,7 +354,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Chassitant v1.4.0</h3>
+            <h3>Chassitant v1.5.0</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

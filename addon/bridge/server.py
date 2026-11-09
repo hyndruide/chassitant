@@ -28,6 +28,7 @@ import queue
 from bridge.agy_client import AgyClient
 from bridge.auth_manager import AuthManager
 from bridge.conversation_store import ConversationStore
+from bridge.ha_indexer import HaIndexer
 from bridge.mcp_manager import McpManager
 from bridge.turn_manager import ActiveTurn, TurnManager
 
@@ -63,6 +64,10 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
     @property
     def turn_manager(self) -> TurnManager:
         return self.server.turn_manager  # type: ignore
+
+    @property
+    def ha_indexer(self) -> HaIndexer:
+        return self.server.ha_indexer  # type: ignore
 
     def send_json(self, status: int, data: Dict[str, Any]) -> None:
         """Send JSON response with CORS headers."""
@@ -358,7 +363,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.4.0",
+                    "version": "1.5.0",
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
                     "agy_authenticated": auth_ok,
@@ -394,6 +399,50 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                     "success": True,
                     "authenticated": auth_ok,
                     "message": auth_msg,
+                },
+            )
+            return
+
+        # 7. Inventory & Knowledge endpoint
+        if path == "/api/inventory":
+            if not self.check_authorization():
+                return
+            inventory_path = Path("/data/ha_inventory.json")
+            if not inventory_path.is_file():
+                inventory_path = Path(__file__).resolve().parent.parent / "ha_inventory.json"
+            if inventory_path.is_file():
+                try:
+                    data = json.loads(inventory_path.read_text(encoding="utf-8"))
+                    counts = {
+                        "weather": len(data.get("weather", [])),
+                        "climates": len(data.get("climates", [])),
+                        "temperatures": len(data.get("temperatures", [])),
+                        "energy_heating": len(data.get("energy_heating", [])),
+                        "covers": len(data.get("covers", [])),
+                        "lights": len(data.get("lights", [])),
+                        "switches": len(data.get("switches", [])),
+                    }
+                    self.send_json(
+                        HTTPStatus.OK,
+                        {
+                            "success": True,
+                            "inventory": data,
+                            "counts": counts,
+                            "scanned_at": data.get("scanned_at"),
+                        },
+                    )
+                    return
+                except Exception as ex:
+                    logger.debug("Error reading inventory file: %s", ex)
+
+            res = self.ha_indexer.run_indexing()
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "inventory": res.get("data"),
+                    "counts": res.get("counts"),
+                    "scanned_at": res.get("scanned_at"),
                 },
             )
             return
@@ -548,6 +597,23 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        # Trigger on-demand entity inventory re-scan & HA_CONTEXT.md generation
+        if path == "/api/inventory/scan":
+            if not self.check_authorization():
+                return
+            logger.info("Triggered on-demand Home Assistant knowledge re-indexing...")
+            res = self.ha_indexer.run_indexing()
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": res.get("success", True),
+                    "counts": res.get("counts"),
+                    "scanned_at": res.get("scanned_at"),
+                    "inventory": res.get("data"),
+                },
+            )
+            return
+
         # 3. Auto-configure MCP with Home Assistant
         if path == "/api/mcp/setup":
             if not self.check_authorization():
@@ -662,6 +728,7 @@ class ChassitantBridgeServer(ThreadingHTTPServer):
         mcp_manager: McpManager,
         web_dir: Path,
         turn_manager: Optional[TurnManager] = None,
+        ha_indexer: Optional[HaIndexer] = None,
     ) -> None:
         super().__init__(server_address, ChassitantRequestHandler)
         self.auth_manager = auth_manager
@@ -670,6 +737,7 @@ class ChassitantBridgeServer(ThreadingHTTPServer):
         self.mcp_manager = mcp_manager
         self.web_dir = web_dir
         self.turn_manager = turn_manager or TurnManager()
+        self.ha_indexer = ha_indexer or HaIndexer()
 
 
 def main() -> None:
@@ -679,6 +747,7 @@ def main() -> None:
     conv_store = ConversationStore()
     mcp_mgr = McpManager()
     turn_mgr = TurnManager()
+    ha_indexer = HaIndexer()
 
     config = auth_mgr.config
     host = config.get("host", "0.0.0.0")
@@ -702,16 +771,29 @@ def main() -> None:
     auth_ok, auth_msg = agy_cli.check_auth(timeout=5)
     print(f"🔐 Statut Google Antigravity : {auth_msg}", flush=True)
 
+    # Launch non-blocking background initial indexing so HA_CONTEXT.md is ready
+    def _run_boot_indexing() -> None:
+        import time
+        time.sleep(1.5)
+        try:
+            print("🏠 Indexation des entités et génération de HA_CONTEXT.md...", flush=True)
+            res = ha_indexer.run_indexing()
+            print(f"   -> {res.get('total_entities', 0)} entités scannées ({res.get('counts', {})})", flush=True)
+        except Exception as err:
+            logger.debug("Boot indexing notice: %s", err)
+
+    threading.Thread(target=_run_boot_indexing, daemon=True, name="BootIndexer").start()
+
     print(f"🚀 Serveur Chatbot Web UI (Ingress) : http://{host}:{ingress_port}", flush=True)
     print(f"📁 Fichiers statiques Web servis depuis : {web_dir}", flush=True)
 
-    server_ingress = ChassitantBridgeServer((host, ingress_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir, turn_mgr)
+    server_ingress = ChassitantBridgeServer((host, ingress_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir, turn_mgr, ha_indexer)
 
     server_bridge = None
     if bridge_port != ingress_port:
         try:
             import threading
-            server_bridge = ChassitantBridgeServer((host, bridge_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir, turn_mgr)
+            server_bridge = ChassitantBridgeServer((host, bridge_port), auth_mgr, agy_cli, conv_store, mcp_mgr, web_dir, turn_mgr, ha_indexer)
             threading.Thread(target=server_bridge.serve_forever, daemon=True).start()
             print(f"🚀 Serveur Assist Bridge (Core API)  : http://{host}:{bridge_port}", flush=True)
         except Exception as err:

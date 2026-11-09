@@ -1186,6 +1186,96 @@ html, body {
 }
 
 /* ==========================================================================
+   INVENTORY & KNOWLEDGE CHEAT SHEET
+   ========================================================================== */
+.inventory-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.inv-pill {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  padding: 4px 10px;
+  font-size: 11.5px;
+  color: var(--text-secondary);
+}
+
+.inv-pill strong {
+  color: var(--text-primary);
+}
+
+.inventory-table-container {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+}
+
+.inv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.inv-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+  padding: 8px 10px;
+  color: var(--text-muted);
+  font-weight: 600;
+  border-bottom: 1px solid var(--border-color);
+  z-index: 2;
+}
+
+.inv-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+}
+
+.inv-table tr:hover td {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.inv-domain-tag {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.inv-domain-tag.weather { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+.inv-domain-tag.climate { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+.inv-domain-tag.sensor { background: rgba(16, 185, 129, 0.2); color: #6ee7b7; }
+.inv-domain-tag.cover { background: rgba(245, 158, 11, 0.2); color: #fcd34d; }
+.inv-domain-tag.light { background: rgba(234, 179, 8, 0.2); color: #fef08a; }
+
+.btn-copy-sm {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btn-copy-sm:hover {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border-color: var(--accent-color);
+}
+
+/* ==========================================================================
    RESPONSIVE DESIGN (Mobile & Tablet)
    ========================================================================== */
 @media (max-width: 768px) {
