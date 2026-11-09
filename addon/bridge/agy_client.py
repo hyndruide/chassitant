@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
 
 logger = logging.getLogger("chassitant.agy")
 
@@ -327,6 +327,8 @@ class AgyClient:
         effort: Optional[str] = None,
         dangerously_skip_permissions: bool = True,
         timeout: int = 300,
+        on_proc_started: Optional[Callable[[subprocess.Popen], None]] = None,
+        cancel_event: Optional[Any] = None,
     ) -> Iterator[Dict[str, Any]]:
         """
         Execute agy with --output-format stream-json and yield parsed events in real time.
@@ -337,6 +339,7 @@ class AgyClient:
           - {"type": "tool_end", "tool": ..., "duration": ..., "output": ...}
           - {"type": "text_delta", "delta": ...}
           - {"type": "done", "response": ..., "duration_seconds": ..., "usage": ...}
+          - {"type": "cancelled", "message": ...}
           - {"type": "error", "error": ...}
         """
         if not self.is_installed():
@@ -381,11 +384,20 @@ class AgyClient:
                 bufsize=1,
                 cwd=self.work_dir,
             )
+            if on_proc_started:
+                try:
+                    on_proc_started(proc)
+                except Exception as ex:
+                    logger.debug("on_proc_started hook error: %s", ex)
 
             full_response: List[str] = []
             final_result: Optional[Dict[str, Any]] = None
 
             for line in proc.stdout:
+                if cancel_event and cancel_event.is_set():
+                    logger.info("Stream interrupted via cancel_event")
+                    break
+
                 line = line.strip()
                 if not line:
                     continue
@@ -447,6 +459,17 @@ class AgyClient:
                 elif event == "result":
                     final_result = data.get("result", {})
 
+            if cancel_event and cancel_event.is_set():
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+                yield {
+                    "type": "cancelled",
+                    "message": "Génération interrompue par l'utilisateur",
+                }
+                return
+
             proc.wait()
 
             if final_result:
@@ -474,6 +497,12 @@ class AgyClient:
                     yield {"type": "error", "error": err_msg}
 
         except Exception as err:
+            if cancel_event and cancel_event.is_set():
+                yield {
+                    "type": "cancelled",
+                    "message": "Génération interrompue par l'utilisateur",
+                }
+                return
             logger.exception("Stream execution error: %s", err)
             yield {"type": "error", "error": str(err)}
 

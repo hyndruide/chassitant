@@ -59,6 +59,10 @@
     },
     authStatus: { authenticated: false, message: '' },
     mcpServers: [],
+    activeStreamAbortController: null,
+    activeStreamRowId: null,
+    currentAccumulatedText: '',
+    currentCollectedSteps: [],
   };
 
   // DOM Elements
@@ -66,6 +70,7 @@
     drawer: document.getElementById('drawer'),
     drawerBackdrop: document.getElementById('drawer-backdrop'),
     btnHamburger: document.getElementById('btn-hamburger'),
+    btnCloseDrawer: document.getElementById('btn-close-drawer'),
     btnNewChat: document.getElementById('btn-new-chat'),
     searchInput: document.getElementById('search-input'),
     drawerContent: document.getElementById('drawer-content'),
@@ -77,6 +82,7 @@
     thinkingText: document.getElementById('thinking-text'),
     promptInput: document.getElementById('prompt-input'),
     btnSend: document.getElementById('btn-send'),
+    inputHintText: document.getElementById('input-hint-text'),
     activeModelHint: document.getElementById('active-model-hint'),
     topbarModelText: document.getElementById('topbar-model-text'),
     btnTopbarMcp: document.getElementById('btn-topbar-mcp'),
@@ -134,54 +140,87 @@
 
     if (isMobile) {
       state.drawerOpen = false;
-      el.drawer.classList.remove('open');
-      el.drawer.classList.add('collapsed');
     } else {
       state.drawerOpen = savedState !== 'true';
-      if (!state.drawerOpen) {
-        el.drawer.classList.add('collapsed');
-      } else {
-        el.drawer.classList.remove('collapsed');
-      }
     }
+    updateDrawerState();
 
     el.btnHamburger.addEventListener('click', toggleDrawer);
+    if (el.btnCloseDrawer) {
+      el.btnCloseDrawer.addEventListener('click', closeDrawer);
+    }
     el.drawerBackdrop.addEventListener('click', closeDrawer);
 
+    // Touch swipe left to close drawer on mobile
+    let touchStartX = 0;
+    let touchStartY = 0;
+    el.drawer.addEventListener('touchstart', (e) => {
+      if (e.touches && e.touches[0]) {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+
+    el.drawer.addEventListener('touchend', (e) => {
+      if (e.changedTouches && e.changedTouches[0]) {
+        const touchEndX = e.changedTouches[0].clientX;
+        const touchEndY = e.changedTouches[0].clientY;
+        const diffX = touchEndX - touchStartX;
+        const diffY = touchEndY - touchStartY;
+        // If swiped left by at least 50px with low vertical movement
+        if (diffX < -50 && Math.abs(diffY) < 100) {
+          closeDrawer();
+        }
+      }
+    }, { passive: true });
+
     window.addEventListener('resize', () => {
-      if (window.innerWidth > 768 && el.drawerBackdrop.classList.contains('active')) {
+      const mobileNow = window.innerWidth <= 768;
+      if (!mobileNow && el.drawerBackdrop.classList.contains('active')) {
         closeDrawer();
       }
     });
   }
 
-  function toggleDrawer() {
+  function updateDrawerState() {
     const isMobile = window.innerWidth <= 768;
     if (isMobile) {
-      state.drawerOpen = !state.drawerOpen;
       if (state.drawerOpen) {
         el.drawer.classList.add('open');
+        el.drawer.classList.remove('collapsed');
         el.drawerBackdrop.classList.add('active');
       } else {
         el.drawer.classList.remove('open');
+        el.drawer.classList.add('collapsed');
         el.drawerBackdrop.classList.remove('active');
       }
     } else {
-      state.drawerOpen = !state.drawerOpen;
+      el.drawer.classList.remove('open');
+      el.drawerBackdrop.classList.remove('active');
       if (state.drawerOpen) {
         el.drawer.classList.remove('collapsed');
-        localStorage.setItem('chassitant_drawer_collapsed', 'false');
       } else {
         el.drawer.classList.add('collapsed');
-        localStorage.setItem('chassitant_drawer_collapsed', 'true');
       }
     }
   }
 
+  function toggleDrawer() {
+    state.drawerOpen = !state.drawerOpen;
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) {
+      localStorage.setItem('chassitant_drawer_collapsed', state.drawerOpen ? 'false' : 'true');
+    }
+    updateDrawerState();
+  }
+
   function closeDrawer() {
     state.drawerOpen = false;
-    el.drawer.classList.remove('open');
-    el.drawerBackdrop.classList.remove('active');
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) {
+      localStorage.setItem('chassitant_drawer_collapsed', 'true');
+    }
+    updateDrawerState();
   }
 
   // ==========================================================================
@@ -356,7 +395,10 @@
                 <span class="reasoning-spinner"></span>
                 <span id="${streamRowId}-status">🧠 Réflexion en cours...</span>
               </div>
-              <span id="${streamRowId}-timer" style="font-family: monospace; opacity: 0.85;">${initialElapsed.toFixed(1)}s</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="${streamRowId}-timer" style="font-family: monospace; opacity: 0.85;">${initialElapsed.toFixed(1)}s</span>
+                <button id="${streamRowId}-cancel-btn" class="btn-cancel-inline" title="Arrêter la réponse">⏹ Annuler</button>
+              </div>
             </div>
             <div class="reasoning-body" id="${streamRowId}-steps">
               <div class="reasoning-step-item done">
@@ -385,6 +427,19 @@
     el.messagesList.insertAdjacentHTML('beforeend', streamRowHtml);
     scrollToBottom();
 
+    state.activeStreamAbortController = new AbortController();
+    state.activeStreamRowId = streamRowId;
+    state.currentAccumulatedText = initialText;
+    state.currentCollectedSteps = initialSteps;
+
+    const cancelBtn = document.getElementById(`${streamRowId}-cancel-btn`);
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelCurrentTurn();
+      });
+    }
+
     const streamRow = document.getElementById(streamRowId);
     const reasoningBox = document.getElementById(`${streamRowId}-reasoning`);
     const statusText = document.getElementById(`${streamRowId}-status`);
@@ -404,6 +459,7 @@
       const url = `${INGRESS_PREFIX}api/conversations/${convId}/stream`;
       const response = await fetch(url, {
         headers: { 'Accept': 'text/event-stream' },
+        signal: state.activeStreamAbortController.signal,
       });
 
       if (!response.ok) {
@@ -494,6 +550,23 @@
             setupCodeBlockActions(el.messagesList);
           }
           scrollToBottom();
+        } else if (ev.type === 'cancelled') {
+          clearInterval(timerInterval);
+          setThinking(false);
+          if (streamRow) streamRow.remove();
+          const msg = ev.assistant_message || {
+            role: 'assistant',
+            text: '*(Génération interrompue par l\'utilisateur)*',
+            created_at: Date.now() / 1000,
+            steps: initialSteps,
+          };
+          if (!state.activeConversation.messages) {
+            state.activeConversation.messages = [];
+          }
+          state.activeConversation.messages.push(msg);
+          el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(msg));
+          setupCodeBlockActions(el.messagesList);
+          scrollToBottom();
         } else if (ev.type === 'error') {
           clearInterval(timerInterval);
           setThinking(false);
@@ -506,6 +579,7 @@
     } catch (err) {
       clearInterval(timerInterval);
       setThinking(false);
+      if (err.name === 'AbortError') return;
       console.debug('attachActiveStream notice:', err);
     }
   }
@@ -804,7 +878,10 @@
                 <span class="reasoning-spinner"></span>
                 <span id="${streamRowId}-status">🧠 Réflexion en cours...</span>
               </div>
-              <span id="${streamRowId}-timer" style="font-family: monospace; opacity: 0.85;">0.0s</span>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span id="${streamRowId}-timer" style="font-family: monospace; opacity: 0.85;">0.0s</span>
+                <button id="${streamRowId}-cancel-btn" class="btn-cancel-inline" title="Arrêter la réponse">⏹ Annuler</button>
+              </div>
             </div>
             <div class="reasoning-body" id="${streamRowId}-steps">
               <div class="reasoning-step-item active">
@@ -819,6 +896,19 @@
     `;
     el.messagesList.insertAdjacentHTML('beforeend', streamRowHtml);
     scrollToBottom();
+
+    state.activeStreamAbortController = new AbortController();
+    state.activeStreamRowId = streamRowId;
+    state.currentAccumulatedText = '';
+    state.currentCollectedSteps = [];
+
+    const cancelBtn = document.getElementById(`${streamRowId}-cancel-btn`);
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        cancelCurrentTurn();
+      });
+    }
 
     const streamRow = document.getElementById(streamRowId);
     const reasoningBox = document.getElementById(`${streamRowId}-reasoning`);
@@ -842,6 +932,7 @@
 
       const response = await fetch(url, {
         method: 'POST',
+        signal: state.activeStreamAbortController.signal,
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'text/event-stream',
@@ -938,6 +1029,7 @@
             state: 'running',
             id: 'step-' + (ev.step_index || collectedSteps.length),
           });
+          state.currentCollectedSteps = collectedSteps;
           if (stepsContainer) {
             stepsContainer.insertAdjacentHTML(
               'beforeend',
@@ -957,10 +1049,12 @@
               stepEl.insertAdjacentHTML('beforeend', `<span class="reasoning-step-badge">${durStr}</span>`);
             }
           }
+          state.currentCollectedSteps = collectedSteps;
           if (statusText) statusText.textContent = '🧠 Analyse des résultats reçus...';
           scrollToBottom();
         } else if (type === 'text_delta') {
           accumulatedText += ev.delta || '';
+          state.currentAccumulatedText = accumulatedText;
           if (contentContainer) {
             contentContainer.style.display = 'block';
             contentContainer.innerHTML = window.marked
@@ -968,6 +1062,24 @@
               : escapeHtml(accumulatedText).replace(/\n/g, '<br>');
             setupCodeBlockActions(contentContainer);
           }
+          scrollToBottom();
+        } else if (type === 'cancelled') {
+          clearInterval(timerInterval);
+          setThinking(false);
+          if (streamRow) streamRow.remove();
+
+          const finalMsg = ev.assistant_message || {
+            role: 'assistant',
+            text: '*(Génération interrompue par l\'utilisateur)*',
+            created_at: Date.now() / 1000,
+            steps: collectedSteps,
+          };
+          if (!state.activeConversation.messages) {
+            state.activeConversation.messages = [];
+          }
+          state.activeConversation.messages.push(finalMsg);
+          el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(finalMsg));
+          setupCodeBlockActions(el.messagesList);
           scrollToBottom();
         } else if (type === 'finished') {
           clearInterval(timerInterval);
@@ -1005,6 +1117,10 @@
     } catch (err) {
       clearInterval(timerInterval);
       setThinking(false);
+      if (err.name === 'AbortError') {
+        // Handled cleanly by cancelCurrentTurn()
+        return;
+      }
       console.error('Send stream failed:', err);
       if (streamRow) streamRow.remove();
 
@@ -1019,6 +1135,56 @@
     }
   }
 
+  async function cancelCurrentTurn() {
+    if (!state.isThinking) return;
+    const convId = state.activeConvId;
+    console.log('Cancelling current turn for conversation:', convId);
+
+    // 1. Abort client stream fetch immediately
+    if (state.activeStreamAbortController) {
+      try {
+        state.activeStreamAbortController.abort();
+      } catch (_) {}
+    }
+
+    // 2. Request backend to terminate running agy process
+    if (convId) {
+      try {
+        fetch(`${INGRESS_PREFIX}api/conversations/${convId}/cancel`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        }).catch((err) => console.debug('Cancel API warning:', err));
+      } catch (_) {}
+    }
+
+    // 3. Remove live reasoning UI and append cancelled message bubble
+    const streamRow = document.getElementById(state.activeStreamRowId);
+    if (streamRow) streamRow.remove();
+
+    const partial = state.currentAccumulatedText ? state.currentAccumulatedText.trim() : '';
+    const cancelNotice = '*(Génération interrompue par l\'utilisateur)*';
+    const finalText = partial ? `${partial}\n\n${cancelNotice}` : cancelNotice;
+
+    const cancelledMsg = {
+      role: 'assistant',
+      text: finalText,
+      created_at: Date.now() / 1000,
+      steps: state.currentCollectedSteps || [],
+    };
+
+    if (!state.activeConversation.messages) {
+      state.activeConversation.messages = [];
+    }
+    state.activeConversation.messages.push(cancelledMsg);
+    el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(cancelledMsg));
+    setupCodeBlockActions(el.messagesList);
+    scrollToBottom();
+
+    setThinking(false);
+    el.promptInput.focus();
+  }
+
   function updateConversationInList(conv) {
     const convIdx = state.conversations.findIndex((c) => c.id === conv.id);
     if (convIdx !== -1) {
@@ -1031,10 +1197,26 @@
 
   function setThinking(active) {
     state.isThinking = active;
-    el.thinkingIndicator.style.display = 'none'; // We now use the live reasoning box!
-    el.btnSend.disabled = active;
+    el.thinkingIndicator.style.display = 'none';
     if (active) {
+      el.btnSend.classList.add('btn-cancel');
+      el.btnSend.disabled = false;
+      el.btnSend.title = "Arrêter la réponse (Échap)";
+      el.btnSend.setAttribute('aria-label', "Arrêter la réponse");
+      el.btnSend.innerHTML = '⏹';
+      if (el.inputHintText) {
+        el.inputHintText.innerHTML = 'Appuyez sur <strong>Échap</strong> ou le bouton <strong>⏹</strong> pour arrêter la réponse';
+      }
       scrollToBottom();
+    } else {
+      el.btnSend.classList.remove('btn-cancel');
+      el.btnSend.disabled = false;
+      el.btnSend.title = "Envoyer le message (Entrée)";
+      el.btnSend.setAttribute('aria-label', "Envoyer le message");
+      el.btnSend.innerHTML = '➤';
+      if (el.inputHintText) {
+        el.inputHintText.innerHTML = 'Astuce : <strong>Entrée</strong> pour envoyer, <strong>Maj + Entrée</strong> pour saut de ligne';
+      }
     }
   }
 
@@ -1347,7 +1529,20 @@
       }
     });
 
-    el.btnSend.addEventListener('click', sendMessage);
+    el.btnSend.addEventListener('click', () => {
+      if (state.isThinking) {
+        cancelCurrentTurn();
+      } else {
+        sendMessage();
+      }
+    });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && state.isThinking) {
+        e.preventDefault();
+        cancelCurrentTurn();
+      }
+    });
 
     // Effort quick toggle button
     if (el.btnEffortToggle) {

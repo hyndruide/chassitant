@@ -20,6 +20,7 @@
             <span class="brand-icon">🤖</span>
             <span>Chassitant</span>
           </div>
+          <button id="btn-close-drawer" class="btn-close-drawer" title="Fermer le menu (✕)">✕</button>
         </div>
         <button id="btn-new-chat" class="btn-new-chat" title="Créer une nouvelle discussion">
           <span>+</span>
@@ -76,14 +77,14 @@
           <button id="btn-effort-toggle" class="badge-tag" style="cursor: pointer;" title="Niveau de réflexion de l'IA (cliquer pour changer : Rapide / Équilibré / Approfondi)">
             <span id="effort-toggle-text">⚡ Rapide</span>
           </button>
-          <button id="btn-compact-conv" class="btn-topbar-action" style="font-size: 13px;" title="Compacter le contexte de cette conversation pour accélérer les réponses">
+          <button id="btn-compact-conv" class="btn-topbar-action desktop-only" style="font-size: 13px;" title="Compacter le contexte de cette conversation pour accélérer les réponses">
             🧹
           </button>
-          <button id="btn-open-auth" class="badge-tag" style="cursor: pointer; background: transparent; border: 1px solid var(--border-color);" title="Connexion Google">
+          <button id="btn-open-auth" class="badge-tag desktop-only" style="cursor: pointer; background: transparent; border: 1px solid var(--border-color);" title="Connexion Google">
             <span id="topbar-auth-dot" class="status-indicator offline" style="margin: 0;"></span>
             <span id="topbar-auth-label">Google Auth</span>
           </button>
-          <button id="btn-topbar-mcp" class="badge-tag highlight" style="cursor: pointer;" title="Statut et connexion au serveur MCP Home Assistant">
+          <button id="btn-topbar-mcp" class="badge-tag highlight desktop-only" style="cursor: pointer;" title="Statut et connexion au serveur MCP Home Assistant">
             <span id="topbar-mcp-dot" class="status-indicator offline" style="margin: 0;"></span>
             <span id="topbar-mcp-text">Connecter MCP</span>
           </button>
@@ -154,7 +155,7 @@
             </button>
           </div>
           <div class="input-footer-hint">
-            <span>Astuce : <strong>Entrée</strong> pour envoyer, <strong>Maj + Entrée</strong> pour saut de ligne</span>
+            <span id="input-hint-text">Astuce : <strong>Entrée</strong> pour envoyer, <strong>Maj + Entrée</strong> pour saut de ligne</span>
             <span id="active-model-hint" style="opacity: 0.8;">Modèle : Auto</span>
           </div>
         </div>
@@ -304,7 +305,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Chassitant v1.3.9</h3>
+            <h3>Chassitant v1.4.0</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

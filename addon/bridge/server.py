@@ -177,7 +177,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                     # Client disconnected, but background worker keeps running!
                     break
 
-                if event.get("type") in ("finished", "error"):
+                if event.get("type") in ("finished", "error", "cancelled"):
                     break
         finally:
             turn.unsubscribe(q)
@@ -358,7 +358,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.3.9",
+                    "version": "1.4.0",
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
                     "agy_authenticated": auth_ok,
@@ -527,6 +527,23 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                     "status": result.get("status"),
                     "response": result.get("response", "Conversation compactée avec succès."),
                     "tokens": result.get("usage", {}).get("total_tokens"),
+                },
+            )
+            return
+
+        # Cancel active turn for conversation
+        if path.startswith("/api/conversations/") and path.endswith("/cancel"):
+            if not self.check_authorization():
+                return
+            conv_id = path.replace("/api/conversations/", "").replace("/cancel", "").strip()
+            logger.info("Received turn cancel request for conversation %s", conv_id)
+            cancelled = self.turn_manager.cancel_turn(conv_id)
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "cancelled": cancelled,
+                    "conv_id": conv_id,
                 },
             )
             return

@@ -24,13 +24,58 @@ class ActiveTurn:
         self.conv_id = conv_id
         self.prompt = prompt
         self.started_at = time.time()
-        self.status = "running"  # "running", "completed", "error"
+        self.status = "running"  # "running", "completed", "error", "cancelled"
         self.steps: List[Dict[str, Any]] = []
         self.accumulated_text = ""
         self.result: Optional[Dict[str, Any]] = None
         self.error: Optional[str] = None
+        self.proc: Optional[Any] = None
+        self._cancelled = threading.Event()
         self._subscribers: List[queue.Queue] = []
         self._lock = threading.Lock()
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self._cancelled.is_set()
+
+    def set_process(self, proc: Any) -> None:
+        """Register the underlying subprocess running this turn."""
+        with self._lock:
+            self.proc = proc
+
+    def cancel(self) -> bool:
+        """Cancel this turn, terminate process and notify all subscribers."""
+        with self._lock:
+            if self.status != "running":
+                return False
+            self.status = "cancelled"
+            self._cancelled.set()
+            proc = self.proc
+
+        if proc:
+            try:
+                logger.info("Terminating process (pid=%s) for cancelled turn %s", getattr(proc, "pid", "?"), self.conv_id)
+                proc.terminate()
+                threading.Thread(target=self._kill_proc_if_alive, args=(proc,), daemon=True).start()
+            except Exception as ex:
+                logger.warning("Error terminating process: %s", ex)
+
+        self.broadcast({
+            "type": "cancelled",
+            "message": "Génération interrompue par l'utilisateur",
+            "accumulated_text": self.accumulated_text,
+        })
+        return True
+
+    def _kill_proc_if_alive(self, proc: Any) -> None:
+        """Wait briefly for process to exit gracefully, then kill if still alive."""
+        try:
+            time.sleep(1.0)
+            if hasattr(proc, "poll") and proc.poll() is None:
+                logger.info("Process %s still alive after terminate; killing forcibly", getattr(proc, "pid", "?"))
+                proc.kill()
+        except Exception:
+            pass
 
     def subscribe(self) -> queue.Queue:
         """Subscribe to live events from this turn."""
@@ -98,6 +143,14 @@ class TurnManager:
                 return turn
             return None
 
+    def cancel_turn(self, conv_id: str) -> bool:
+        """Cancel active turn for conversation if currently running."""
+        with self._lock:
+            turn = self._turns.get(conv_id)
+            if turn and turn.status == "running":
+                return turn.cancel()
+            return False
+
     def start_turn(
         self,
         conv_id: str,
@@ -154,13 +207,22 @@ class TurnManager:
                 effort=effort,
                 dangerously_skip_permissions=True,
                 timeout=timeout,
+                on_proc_started=turn.set_process,
+                cancel_event=turn._cancelled,
             ):
+                if turn.is_cancelled:
+                    logger.info("Turn %s marked cancelled during stream; exiting worker loop", conv_id)
+                    break
+
                 actual_agy_id = event.get("conversation_id")
                 if actual_agy_id:
                     conv_store.set_agy_conversation_id(conv_id, actual_agy_id)
 
                 etype = event.get("type")
-                if etype == "tool_start":
+                if etype == "cancelled":
+                    turn.status = "cancelled"
+                    break
+                elif etype == "tool_start":
                     steps_log.append({
                         "type": "tool",
                         "tool": event.get("tool"),
@@ -186,6 +248,28 @@ class TurnManager:
 
                 turn.steps = steps_log
                 turn.broadcast(event)
+
+            # Check if cancelled by user
+            if turn.is_cancelled or turn.status == "cancelled":
+                turn.status = "cancelled"
+                partial_text = full_text.strip()
+                notice = "*(Génération interrompue par l'utilisateur)*"
+                final_text = f"{partial_text}\n\n{notice}" if partial_text else notice
+                assistant_msg = conv_store.add_message(
+                    conv_id=conv_id,
+                    role="assistant",
+                    text=final_text,
+                    steps=steps_log,
+                )
+                turn.result = assistant_msg
+                logger.info("Turn cancelled for conv %s (saved partial message, %d chars)", conv_id, len(final_text))
+                turn.broadcast({
+                    "type": "cancelled",
+                    "message": "Génération interrompue par l'utilisateur",
+                    "assistant_message": assistant_msg,
+                    "conversation": conv_store.get_conversation(conv_id),
+                })
+                return
 
             # Persist assistant message even if all web clients disconnected!
             if full_text.strip():
@@ -222,6 +306,8 @@ class TurnManager:
                 })
 
         except Exception as err:
+            if turn.is_cancelled or turn.status == "cancelled":
+                return
             logger.exception("Turn worker exception for conv %s: %s", conv_id, err)
             err_msg = f"Erreur lors de l'exécution : {err}"
             turn.status = "error"
@@ -234,4 +320,6 @@ class TurnManager:
             )
             turn.broadcast({"type": "error", "error": err_msg})
         finally:
-            turn.status = "completed"
+            with self._lock:
+                if turn.status == "running":
+                    turn.status = "completed"
