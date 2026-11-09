@@ -138,7 +138,9 @@ class TurnManager:
         timeout: int,
     ) -> None:
         """Worker thread executing the turn via agy stream."""
-        logger.info("Turn worker started for conv %s: '%s...'", conv_id, prompt[:40])
+        conv = conv_store.get_conversation(conv_id)
+        target_agy_id = conv.get("agy_conversation_id") if conv else None
+        logger.info("Turn worker started for conv %s (agy_id=%s): '%s...'", conv_id, target_agy_id, prompt[:40])
         steps_log: List[Dict[str, Any]] = []
         full_text = ""
         final_tokens = None
@@ -147,12 +149,16 @@ class TurnManager:
         try:
             for event in agy_client.process_stream(
                 prompt=prompt,
-                conversation_id=conv_id,
+                conversation_id=target_agy_id,
                 model=model,
                 effort=effort,
                 dangerously_skip_permissions=True,
                 timeout=timeout,
             ):
+                actual_agy_id = event.get("conversation_id")
+                if actual_agy_id:
+                    conv_store.set_agy_conversation_id(conv_id, actual_agy_id)
+
                 etype = event.get("type")
                 if etype == "tool_start":
                     steps_log.append({

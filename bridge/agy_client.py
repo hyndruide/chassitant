@@ -220,8 +220,8 @@ class AgyClient:
 
         cmd = [self.binary_path, "-p", prompt, "--output-format", "json"]
 
-        if conversation_id:
-            cmd.extend(["--conversation", conversation_id])
+        if conversation_id and str(conversation_id).strip():
+            cmd.extend(["--conversation", str(conversation_id).strip()])
 
         if model and model != "default":
             cmd.extend(["--model", model])
@@ -344,8 +344,8 @@ class AgyClient:
             return
 
         cmd = [self.binary_path, "-p", prompt, "--output-format", "stream-json"]
-        if conversation_id:
-            cmd.extend(["--conversation", conversation_id])
+        if conversation_id and str(conversation_id).strip():
+            cmd.extend(["--conversation", str(conversation_id).strip()])
         if model and model != "default":
             cmd.extend(["--model", model])
 

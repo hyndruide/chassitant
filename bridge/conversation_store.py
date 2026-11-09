@@ -62,6 +62,7 @@ class ConversationStore:
             result.append(
                 {
                     "id": conv_id,
+                    "agy_conversation_id": data.get("agy_conversation_id"),
                     "title": data.get("title", "Nouvelle discussion"),
                     "created_at": data.get("created_at", time.time()),
                     "updated_at": data.get("updated_at", time.time()),
@@ -82,6 +83,7 @@ class ConversationStore:
         now = time.time()
         record = {
             "id": conv_id,
+            "agy_conversation_id": None,
             "title": title or "Nouvelle discussion",
             "created_at": now,
             "updated_at": now,
@@ -90,6 +92,13 @@ class ConversationStore:
         self._conversations[conv_id] = record
         self.save()
         return record
+
+    def set_agy_conversation_id(self, conv_id: str, agy_conv_id: str) -> None:
+        """Associate an internal conversation thread with agy's underlying conversation ID."""
+        if conv_id in self._conversations and agy_conv_id:
+            if self._conversations[conv_id].get("agy_conversation_id") != agy_conv_id:
+                self._conversations[conv_id]["agy_conversation_id"] = agy_conv_id
+                self.save()
 
     def rename_conversation(self, conv_id: str, new_title: str) -> bool:
         """Update conversation title."""

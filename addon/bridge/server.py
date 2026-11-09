@@ -358,7 +358,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.3.7",
+                    "version": "1.3.8",
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
                     "agy_authenticated": auth_ok,
@@ -446,15 +446,20 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             stream_mode = payload.get("stream", True)
 
             if not stream_mode:
-                logger.info("Executing agy sync turn for conversation %s: '%s...'", conv_id, prompt[:40])
+                conv = self.conv_store.get_conversation(conv_id)
+                target_agy_id = conv.get("agy_conversation_id") if conv else None
+                logger.info("Executing agy sync turn for conversation %s (agy_id=%s): '%s...'", conv_id, target_agy_id, prompt[:40])
                 result = self.agy_client.process(
                     prompt=prompt,
-                    conversation_id=conv_id,
+                    conversation_id=target_agy_id,
                     model=model,
                     effort=effort,
                     dangerously_skip_permissions=True,
                     timeout=timeout,
                 )
+                actual_agy_id = result.get("conversation_id")
+                if actual_agy_id:
+                    self.conv_store.set_agy_conversation_id(conv_id, actual_agy_id)
 
                 response_text = result.get("response", "").strip()
                 if not response_text:
@@ -508,8 +513,13 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             if not self.check_authorization():
                 return
             conv_id = path.replace("/api/conversations/", "").replace("/compact", "").strip()
-            logger.info("Triggering context compaction for conversation %s", conv_id)
-            result = self.agy_client.compact_conversation(conversation_id=conv_id, timeout=90)
+            conv = self.conv_store.get_conversation(conv_id)
+            target_agy_id = conv.get("agy_conversation_id") if conv else conv_id
+            if not target_agy_id:
+                self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "Aucune session agy active à compacter"})
+                return
+            logger.info("Triggering context compaction for conversation %s (agy_id=%s)", conv_id, target_agy_id)
+            result = self.agy_client.compact_conversation(conversation_id=target_agy_id, timeout=90)
             self.send_json(
                 HTTPStatus.OK,
                 {
