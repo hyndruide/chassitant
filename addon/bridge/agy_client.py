@@ -229,6 +229,9 @@ class AgyClient:
         eff = (effort or "").strip().lower()
         if not eff or eff == "default":
             eff = "low"
+        elif eff in ("high", "max", "xhigh"):
+            logger.info("Capping effort '%s' to 'medium' to avoid 300s thinking stall on multi-tool HA operations", eff)
+            eff = "medium"
         cmd.extend(["--effort", eff])
 
         if dangerously_skip_permissions:
@@ -352,6 +355,9 @@ class AgyClient:
         eff = (effort or "").strip().lower()
         if not eff or eff == "default":
             eff = "low"
+        elif eff in ("high", "max", "xhigh"):
+            logger.info("Capping effort '%s' to 'medium' to avoid 300s thinking stall on multi-tool HA operations", eff)
+            eff = "medium"
         cmd.extend(["--effort", eff])
 
         if dangerously_skip_permissions:

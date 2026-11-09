@@ -47,6 +47,11 @@ export CHASSITANT_DATA_DIR="/data"
 export INGRESS_PORT="${INGRESS_PORT:-8098}"
 export PORT="${PORT:-8099}"
 
+# Optimize ha-mcp: disable gate roundtrips and massive overview dumps
+export ENABLE_MANDATORY_BPS="false"
+export ENABLE_STRICT_MANDATORY_BPS="false"
+export DISABLED_TOOLS="ha_get_overview,ha_get_automation_traces,ha_get_camera_image"
+
 # Auto-configure ha-mcp
 echo "[Chassitant] Auto-configuration du serveur MCP Home Assistant..."
 python3 -c "import sys; sys.path.insert(0, '/app'); from bridge.mcp_manager import McpManager; McpManager().auto_configure_homeassistant_mcp()" || true

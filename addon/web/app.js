@@ -47,7 +47,14 @@
     isThinking: false,
     settings: {
       model: localStorage.getItem('chassitant_model') || 'default',
-      effort: localStorage.getItem('chassitant_effort') || 'low',
+      effort: (function() {
+        const eff = localStorage.getItem('chassitant_effort');
+        if (!eff || eff === 'high' || eff === 'max') {
+          localStorage.setItem('chassitant_effort', 'low');
+          return 'low';
+        }
+        return eff;
+      })(),
       timeout: parseInt(localStorage.getItem('chassitant_timeout') || '300', 10),
     },
     authStatus: { authenticated: false, message: '' },

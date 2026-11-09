@@ -104,6 +104,9 @@ class McpManager:
         os.environ["SUPERVISOR_TOKEN"] = supervisor_token
         os.environ["HOMEASSISTANT_TOKEN"] = supervisor_token
         os.environ["HOMEASSISTANT_URL"] = ha_url
+        os.environ["ENABLE_MANDATORY_BPS"] = "false"
+        os.environ["ENABLE_STRICT_MANDATORY_BPS"] = "false"
+        os.environ["DISABLED_TOOLS"] = "ha_get_overview,ha_get_automation_traces,ha_get_camera_image"
 
         server_entry = {
             "command": "ha-mcp",
@@ -111,6 +114,9 @@ class McpManager:
             "env": {
                 "HOMEASSISTANT_URL": ha_url,
                 "HOMEASSISTANT_TOKEN": supervisor_token,
+                "ENABLE_MANDATORY_BPS": "false",
+                "ENABLE_STRICT_MANDATORY_BPS": "false",
+                "DISABLED_TOOLS": "ha_get_overview,ha_get_automation_traces,ha_get_camera_image",
             },
         }
 
@@ -149,6 +155,12 @@ class McpManager:
                     f"HOMEASSISTANT_URL={ha_url}",
                     "--env",
                     f"HOMEASSISTANT_TOKEN={supervisor_token}",
+                    "--env",
+                    "ENABLE_MANDATORY_BPS=false",
+                    "--env",
+                    "ENABLE_STRICT_MANDATORY_BPS=false",
+                    "--env",
+                    "DISABLED_TOOLS=ha_get_overview,ha_get_automation_traces,ha_get_camera_image",
                     "homeassistant",
                     "ha-mcp",
                 ]
