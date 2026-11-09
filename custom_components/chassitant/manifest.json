@@ -1,12 +1,12 @@
 {
   "domain": "chassitant",
-  "name": "Chassitant (Antigravity agy)",
+  "name": "Françoise (Antigravity agy)",
   "codeowners": ["@hyndruide"],
   "config_flow": true,
-  "documentation": "https://github.com/hyndruide/chassitant",
+  "documentation": "https://github.com/hyndruide/francoise",
   "integration_type": "hub",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/hyndruide/chassitant/issues",
+  "issue_tracker": "https://github.com/hyndruide/francoise/issues",
   "requirements": [],
-  "version": "1.5.2"
+  "version": "1.7.0"
 }

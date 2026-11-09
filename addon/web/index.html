@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Chassitant — Chatbot IA Home Assistant</title>
+  <title>Françoise — Chatbot IA Home Assistant</title>
   <link rel="stylesheet" href="libs/highlight-dark.min.css">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -17,8 +17,8 @@
       <div class="drawer-header">
         <div class="drawer-brand">
           <div class="brand-title">
-            <span class="brand-icon">🤖</span>
-            <span>Chassitant</span>
+            <span class="brand-icon">🍸</span>
+            <span>Françoise</span>
           </div>
           <button id="btn-close-drawer" class="btn-close-drawer" title="Fermer le menu (✕)">✕</button>
         </div>
@@ -106,10 +106,10 @@
       <div id="chat-scroll" class="chat-container">
         <!-- Welcome Hero Banner (shown when conversation has no messages) -->
         <div id="welcome-hero" class="welcome-hero">
-          <div class="welcome-icon">🤖</div>
-          <h1 class="welcome-title">Bienvenue sur Chassitant</h1>
+          <div class="welcome-icon">🍸</div>
+          <h1 class="welcome-title">Bienvenue sur Françoise</h1>
           <p class="welcome-subtitle">
-            Votre assistant intelligent autonome pour Home Assistant, propulsé par Google Antigravity (agy) et le serveur MCP Home Assistant.
+            Votre assistante intelligente autonome pour Home Assistant, propulsée par Google Antigravity (agy) et le serveur MCP Home Assistant.
           </p>
           <div class="suggestion-chips">
             <button class="suggestion-chip" data-prompt="Donne-moi un aperçu météo et la consommation électrique de la maison">
@@ -136,10 +136,10 @@
 
         <!-- Thinking / Processing Indicator -->
         <div id="thinking-indicator" class="thinking-row" style="display: none;">
-          <div class="message-avatar" style="background: var(--accent-gradient); color: white;">🤖</div>
+          <div class="message-avatar" style="background: var(--accent-gradient); color: white;">🍸</div>
           <div class="thinking-bubble">
             <div class="pulse-dot"></div>
-            <span id="thinking-text">Chassitant analyse votre demande et exécute les outils...</span>
+            <span id="thinking-text">Françoise analyse votre demande et exécute les outils...</span>
           </div>
         </div>
       </div>
@@ -152,7 +152,7 @@
               id="prompt-input"
               class="chat-textarea"
               rows="1"
-              placeholder="Écrivez votre message à Chassitant... (ex: Crée une automatisation, donne-moi la météo...)"
+              placeholder="Écrivez votre message à Françoise... (ex: Crée une automatisation, donne-moi la météo...)"
             ></textarea>
             <button id="btn-send" class="btn-send" title="Envoyer le message (Entrée)">
               ➤
@@ -173,7 +173,7 @@
       <div class="modal-header">
         <div class="modal-title">
           <span>⚙️</span>
-          <span>Configuration Chassitant</span>
+          <span>Configuration Françoise</span>
         </div>
         <button id="btn-close-modal" class="btn-close-modal" title="Fermer">✕</button>
       </div>
@@ -276,7 +276,7 @@
               <span id="mcp-status-badge" class="auth-status-tag ko">Vérification...</span>
             </div>
             <p id="mcp-status-desc" class="form-help">
-              Le protocole MCP permet à Chassitant d'interagir directement avec Home Assistant : piloter vos appareils, consulter vos capteurs et gérer votre domotique en toute autonomie.
+              Le protocole MCP permet à Françoise d'interagir directement avec Home Assistant : piloter vos appareils, consulter vos capteurs et gérer votre domotique en toute autonomie.
             </p>
           </div>
 
@@ -360,13 +360,13 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Chassitant v1.6.1</h3>
+            <h3>Françoise v1.7.0</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>
             <div class="auth-card">
               <div><strong>Auteur :</strong> Denis (hyndruide)</div>
-              <div><strong>Dépôt GitHub :</strong> <a href="https://github.com/hyndruide/chassitant" target="_blank">hyndruide/chassitant</a></div>
+              <div><strong>Dépôt GitHub :</strong> <a href="https://github.com/hyndruide/francoise" target="_blank">hyndruide/francoise</a></div>
               <div><strong>Stockage persistant :</strong> <code>/data/conversations.json</code></div>
               <div><strong>Outils MCP :</strong> ~80+ outils Home Assistant (ha-mcp 9.1.2)</div>
             </div>

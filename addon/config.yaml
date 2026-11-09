@@ -1,7 +1,7 @@
-name: "Chassitant (Antigravity agy)"
+name: "Françoise (Antigravity agy)"
 slug: "chassitant_agy"
 description: "Chatbot IA avec Drawer rétractable, Guide contextuel & raccourcis HA_CONTEXT.md, Google Antigravity agy et serveur MCP Home Assistant pré-embarqué."
-version: "1.6.1"
+version: "1.7.0"
 startup: application
 boot: auto
 init: false
@@ -13,7 +13,7 @@ arch:
 ingress: true
 ingress_port: 8098
 panel_icon: mdi:robot-excited
-panel_title: "Chassitant"
+panel_title: "Françoise"
 ports:
   8099/tcp: 8099
 ports_description:

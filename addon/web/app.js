@@ -1,5 +1,5 @@
 /**
- * Chassitant — Application Client Chatbot & Ingress
+ * Françoise — Application Client Chatbot & Ingress
  * Gère le Drawer rétractable, les conversations persistantes, le rendu Markdown et la configuration MCP/Google.
  */
 
@@ -1669,7 +1669,7 @@
       }
       if (el.mcpStatusDesc) {
         el.mcpStatusDesc.textContent = isConnected
-          ? 'Le serveur ha-mcp est opérationnel. Chassitant a un accès complet aux outils de contrôle, lecture des états et configuration de Home Assistant.'
+          ? 'Le serveur ha-mcp est opérationnel. Françoise a un accès complet aux outils de contrôle, lecture des états et configuration de Home Assistant.'
           : 'Le serveur MCP n\'est pas encore connecté. Cliquez sur le bouton "Connecter / Reconnecter MCP" pour activer le contrôle de votre domotique.';
       }
 
