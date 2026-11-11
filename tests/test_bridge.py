@@ -133,6 +133,7 @@ class TestBridgeServer(unittest.TestCase):
             providers = data.get("providers", [])
             provider_ids = [p["id"] for p in providers]
             self.assertIn("agy", provider_ids)
+            self.assertIn("codex", provider_ids)
             self.assertIn("groq", provider_ids)
             self.assertIn("openrouter", provider_ids)
             self.assertIn("ollama", provider_ids)

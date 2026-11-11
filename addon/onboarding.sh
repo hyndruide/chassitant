@@ -19,7 +19,9 @@ agy || true
 echo ""
 echo "----------------------------------------------------------------"
 echo "Session terminée. Vous êtes dans le terminal interactif."
-echo "Tapez 'agy' pour relancer l'assistant à tout moment."
+echo "Commandes disponibles :"
+echo "  - 'agy'   : pour reconnecter votre compte Google (Antigravity)"
+echo "  - 'codex' : pour connecter votre compte ChatGPT Plus/Pro (OpenAI)"
 echo "----------------------------------------------------------------"
 
 exec /bin/bash

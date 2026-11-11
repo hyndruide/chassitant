@@ -31,7 +31,17 @@ if [ ! -L /root/.gemini ]; then
     ln -sfn /data/.gemini /root/.gemini
 fi
 
-# Ensure GEMINI.md and skills are available in both /app and ~/.gemini/antigravity-cli/skills
+# Symlink ~/.codex to /data/.codex for OpenAI Codex permanent persistence
+mkdir -p /data/.codex
+if [ ! -L /root/.codex ]; then
+    if [ -d /root/.codex ]; then
+        cp -rn /root/.codex/* /data/.codex/ 2>/dev/null || true
+        rm -rf /root/.codex
+    fi
+    ln -sfn /data/.codex /root/.codex
+fi
+
+# Ensure GEMINI.md, AGENTS.md and skills are available in both /app and ~/.gemini/antigravity-cli/skills
 mkdir -p /root/.gemini/antigravity-cli/skills
 if [ -d /app/.agents/skills ]; then
     cp -rn /app/.agents/skills/* /root/.gemini/antigravity-cli/skills/ 2>/dev/null || true
@@ -40,12 +50,17 @@ if [ -f /app/GEMINI.md ]; then
     cp -f /app/GEMINI.md /root/GEMINI.md 2>/dev/null || true
     cp -f /app/GEMINI.md /data/GEMINI.md 2>/dev/null || true
 fi
+if [ -f /app/AGENTS.md ]; then
+    cp -f /app/AGENTS.md /root/AGENTS.md 2>/dev/null || true
+    cp -f /app/AGENTS.md /data/AGENTS.md 2>/dev/null || true
+fi
 if [ -f /data/HA_CONTEXT.md ]; then
     cp -f /data/HA_CONTEXT.md /app/HA_CONTEXT.md 2>/dev/null || true
     cp -f /data/HA_CONTEXT.md /root/HA_CONTEXT.md 2>/dev/null || true
 fi
 
 export HOME="/root"
+export CODEX_HOME="/root/.codex"
 export PATH="/usr/local/bin:/root/.local/bin:/root/bin:$PATH"
 export CHASSITANT_DATA_DIR="/data"
 export INGRESS_PORT="${INGRESS_PORT:-8098}"

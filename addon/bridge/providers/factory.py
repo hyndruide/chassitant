@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional
 
 from bridge.providers.base import BaseProvider
 from bridge.providers.agy_provider import AgyProvider
+from bridge.providers.codex_provider import CodexProvider
 from bridge.providers.openai_compatible_provider import OpenAICompatibleProvider
 
 logger = logging.getLogger("chassitant.providers.factory")
@@ -60,6 +61,9 @@ class ProviderFactory:
             api_key="ollama",
             default_model=cfg.get("ollama_model", "llama3.2"),
         )
+
+        # 5. OpenAI Codex CLI (ChatGPT Account)
+        self._providers["codex"] = CodexProvider()
 
     def get_active_provider_id(self) -> str:
         # Default to 'agy' if not set

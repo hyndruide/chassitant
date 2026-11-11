@@ -125,6 +125,7 @@
     btnCloseModal: document.getElementById('btn-close-modal'),
     btnSaveSettings: document.getElementById('btn-save-settings'),
     selectProvider: document.getElementById('select-provider'),
+    providerConfigCodex: document.getElementById('provider-config-codex'),
     providerConfigGroq: document.getElementById('provider-config-groq'),
     providerConfigOpenRouter: document.getElementById('provider-config-openrouter'),
     providerConfigOllama: document.getElementById('provider-config-ollama'),
@@ -1509,6 +1510,7 @@
   }
 
   function updateProviderUiVisibility(providerId) {
+    if (el.providerConfigCodex) el.providerConfigCodex.style.display = providerId === 'codex' ? 'block' : 'none';
     if (el.providerConfigGroq) el.providerConfigGroq.style.display = providerId === 'groq' ? 'block' : 'none';
     if (el.providerConfigOpenRouter) el.providerConfigOpenRouter.style.display = providerId === 'openrouter' ? 'block' : 'none';
     if (el.providerConfigOllama) el.providerConfigOllama.style.display = providerId === 'ollama' ? 'block' : 'none';
@@ -1878,7 +1880,8 @@
 
   function updateModelBadges() {
     let provPrefix = '';
-    if (state.activeProviderId === 'groq') provPrefix = '⚡ Groq: ';
+    if (state.activeProviderId === 'codex') provPrefix = '🟢 Codex: ';
+    else if (state.activeProviderId === 'groq') provPrefix = '⚡ Groq: ';
     else if (state.activeProviderId === 'openrouter') provPrefix = '🌐 OpenRouter: ';
     else if (state.activeProviderId === 'ollama') provPrefix = '🦙 Ollama: ';
     else provPrefix = '✨ ';
@@ -1887,6 +1890,9 @@
       'default': state.activeProviderId === 'agy' ? 'Gemini 3.8 Flash' : 'Par défaut',
       'gemini-2.5-flash': 'Gemini 2.5 Flash',
       'gemini-2.5-pro': 'Gemini 2.5 Pro',
+      'gpt-4o': 'GPT-4o',
+      'o3-mini': 'o3-mini',
+      'o1': 'o1',
       'llama-3.3-70b-versatile': 'Llama 3.3 70B',
       'deepseek/deepseek-r1:free': 'DeepSeek R1',
       'llama3.2': 'Llama 3.2',

@@ -2,12 +2,14 @@
 
 from bridge.providers.base import BaseProvider
 from bridge.providers.agy_provider import AgyProvider
+from bridge.providers.codex_provider import CodexProvider
 from bridge.providers.openai_compatible_provider import OpenAICompatibleProvider
 from bridge.providers.factory import ProviderFactory
 
 __all__ = [
     "BaseProvider",
     "AgyProvider",
+    "CodexProvider",
     "OpenAICompatibleProvider",
     "ProviderFactory",
 ]

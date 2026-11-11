@@ -327,6 +327,7 @@
             <label class="form-label">Fournisseur d'Intelligence Artificielle (Moteur)</label>
             <select id="select-provider" class="form-select">
               <option value="agy">🟣 Google Antigravity (Compte Google, Quota gratuit Gemini)</option>
+              <option value="codex">🟢 OpenAI Codex CLI (Compte ChatGPT Plus/Pro, Quota inclus)</option>
               <option value="groq">⚡ Groq (Llama 3.3 70B Gratuit & Ultra-rapide)</option>
               <option value="openrouter">🌐 OpenRouter (DeepSeek R1 :free & multi-modèles)</option>
               <option value="ollama">🦙 Ollama (Modèles locaux 100% gratuits & privés)</option>
@@ -335,6 +336,14 @@
           </div>
 
           <!-- Provider Specific Config Boxes -->
+          <div id="provider-config-codex" class="provider-config-box" style="display: none;">
+            <div style="font-size: 12px; line-height: 1.5; color: var(--text-secondary);">
+              <strong style="color: var(--text-primary);">🔗 Connexion OpenAI Codex CLI</strong>
+              <p style="margin: 6px 0;">Codex CLI utilise directement votre compte ChatGPT (Plus, Pro, Team). Pour connecter votre session la première fois, ouvrez l'onglet <strong>Google & Auth (Terminal)</strong> et lancez :</p>
+              <code style="display: block; background: rgba(0,0,0,0.4); padding: 6px 10px; border-radius: 4px; font-family: var(--font-mono); color: #34d399; margin: 4px 0;">codex</code>
+              <span class="form-help" style="font-size: 11px; margin-top: 6px; display: block;">Suivez le lien d'autorisation ChatGPT affiché. Vos identifiants sont sauvegardés de manière permanente dans <code>/data/.codex</code>.</span>
+            </div>
+          </div>
           <div id="provider-config-groq" class="provider-config-box" style="display: none;">
             <div class="form-group" style="margin-bottom: 0;">
               <label class="form-label" style="font-size: 12px;">Clé d'API Groq (Gratuite sur <a href="https://console.groq.com/keys" target="_blank" style="color: #60a5fa;">console.groq.com</a>)</label>
@@ -392,7 +401,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.8.0</h3>
+            <h3>Françoise v1.8.1</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>
