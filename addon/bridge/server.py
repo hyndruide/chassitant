@@ -30,6 +30,7 @@ from bridge.auth_manager import AuthManager
 from bridge.conversation_store import ConversationStore
 from bridge.ha_indexer import HaIndexer
 from bridge.mcp_manager import McpManager
+from bridge.providers.factory import ProviderFactory
 from bridge.turn_manager import ActiveTurn, TurnManager
 
 logging.basicConfig(
@@ -68,6 +69,10 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
     @property
     def ha_indexer(self) -> HaIndexer:
         return self.server.ha_indexer  # type: ignore
+
+    @property
+    def provider_factory(self) -> ProviderFactory:
+        return self.server.provider_factory  # type: ignore
 
     def send_json(self, status: int, data: Dict[str, Any]) -> None:
         """Send JSON response with CORS headers."""
@@ -356,20 +361,37 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
         if path in ("/api/status", "/api/health"):
             if not self.check_authorization():
                 return
-            auth_ok, auth_msg = self.agy_client.check_auth(timeout=5)
+            active_prov = self.provider_factory.get_active_provider()
+            auth_ok, auth_msg = active_prov.check_auth(timeout=5)
             mcps = self.mcp_manager.list_mcp_servers()
-            models = self.agy_client.list_models()
+            models = active_prov.list_models()
             self.send_json(
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.7.1",
+                    "version": "1.8.0",
+                    "active_provider": active_prov.provider_id,
+                    "provider_name": active_prov.display_name,
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
                     "agy_authenticated": auth_ok,
                     "agy_status_message": auth_msg,
                     "mcp_servers": mcps,
                     "models_count": len(models),
+                },
+            )
+            return
+
+        # Providers endpoint
+        if path == "/api/providers":
+            if not self.check_authorization():
+                return
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "active_provider": self.provider_factory.get_active_provider_id(),
+                    "providers": self.provider_factory.list_providers(),
                 },
             )
             return
@@ -401,7 +423,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
         if path == "/api/models":
             if not self.check_authorization():
                 return
-            models = self.agy_client.list_models()
+            models = self.provider_factory.get_active_provider().list_models()
             self.send_json(HTTPStatus.OK, {"success": True, "models": models})
             return
 
@@ -503,6 +525,39 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
+        # Providers select & config endpoints
+        if path == "/api/providers/select":
+            if not self.check_authorization():
+                return
+            pid = payload.get("provider", "agy").strip()
+            ok = self.provider_factory.set_active_provider(pid)
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": ok,
+                    "active_provider": self.provider_factory.get_active_provider_id(),
+                    "models": self.provider_factory.get_active_provider().list_models(),
+                },
+            )
+            return
+
+        if path == "/api/providers/config":
+            if not self.check_authorization():
+                return
+            pid = payload.get("provider", "").strip()
+            cfg = payload.get("config", {})
+            if pid and isinstance(cfg, dict):
+                self.provider_factory.update_provider_config(pid, cfg)
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "active_provider": self.provider_factory.get_active_provider_id(),
+                    "providers": self.provider_factory.list_providers(),
+                },
+            )
+            return
+
         # 1. Create new conversation
         if path == "/api/conversations":
             if not self.check_authorization():
@@ -595,6 +650,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 effort=effort,
                 timeout=timeout,
                 pre_prompt=pre_prompt,
+                provider=self.provider_factory.get_active_provider(),
             )
 
             # Stream live events to this client (turn continues in background if client leaves)
@@ -687,14 +743,31 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             if pre_prompt and pre_prompt.strip() and not conv_id:
                 effective_prompt = f"[Consignes système : {pre_prompt.strip()}]\n\n{prompt}"
 
-            res = self.agy_client.process(
-                prompt=effective_prompt,
-                conversation_id=conv_id,
-                model=model,
-                effort=effort,
-                dangerously_skip_permissions=True,
-                timeout=timeout,
-            )
+            active_prov = self.provider_factory.get_active_provider()
+            if active_prov.provider_id == "agy":
+                res = self.agy_client.process(
+                    prompt=effective_prompt,
+                    conversation_id=conv_id,
+                    model=model,
+                    effort=effort,
+                    dangerously_skip_permissions=True,
+                    timeout=timeout,
+                )
+            else:
+                full_resp = ""
+                for ev in active_prov.process_stream(
+                    prompt=effective_prompt,
+                    conversation_id=conv_id,
+                    model=model,
+                    effort=effort,
+                    timeout=timeout,
+                ):
+                    if ev.get("type") == "text_delta":
+                        full_resp += ev.get("delta", "")
+                    elif ev.get("type") == "done" and not full_resp:
+                        full_resp = ev.get("response", "")
+                res = {"success": True, "status": "SUCCESS", "response": full_resp}
+
             status_code = HTTPStatus.OK if res.get("success") else HTTPStatus.INTERNAL_SERVER_ERROR
             self.send_json(status_code, res)
             return
@@ -777,6 +850,7 @@ class ChassitantBridgeServer(ThreadingHTTPServer):
         web_dir: Optional[Path] = None,
         turn_manager: Optional[TurnManager] = None,
         ha_indexer: Optional[HaIndexer] = None,
+        provider_factory: Optional[ProviderFactory] = None,
     ) -> None:
         super().__init__(server_address, ChassitantRequestHandler)
         self.auth_manager = auth_manager
@@ -786,6 +860,7 @@ class ChassitantBridgeServer(ThreadingHTTPServer):
         self.web_dir = web_dir or (Path(__file__).resolve().parent.parent / "addon" / "web")
         self.turn_manager = turn_manager or TurnManager()
         self.ha_indexer = ha_indexer or HaIndexer()
+        self.provider_factory = provider_factory or ProviderFactory(self.auth_manager, self.agy_client)
 
 
 def main() -> None:

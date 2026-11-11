@@ -115,6 +115,78 @@ class TestBridgeServer(unittest.TestCase):
             data = json.loads(resp.read().decode("utf-8"))
             self.assertTrue(data.get("valid"))
 
+    def test_providers_endpoint(self) -> None:
+        """Verify /api/providers endpoint lists available providers."""
+        url = f"http://127.0.0.1:{self.port}/api/providers"
+        req = request.Request(
+            url,
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            },
+        )
+        with request.urlopen(req) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data.get("success"))
+            self.assertIn("active_provider", data)
+            providers = data.get("providers", [])
+            provider_ids = [p["id"] for p in providers]
+            self.assertIn("agy", provider_ids)
+            self.assertIn("groq", provider_ids)
+            self.assertIn("openrouter", provider_ids)
+            self.assertIn("ollama", provider_ids)
+
+    def test_providers_select_and_config(self) -> None:
+        """Verify selecting and configuring a provider."""
+        # 1. Select Groq
+        url_select = f"http://127.0.0.1:{self.port}/api/providers/select"
+        req_select = request.Request(
+            url_select,
+            data=json.dumps({"provider": "groq"}).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with request.urlopen(req_select) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data.get("success"))
+            self.assertEqual(data.get("active_provider"), "groq")
+
+        # 2. Configure Groq Key
+        url_cfg = f"http://127.0.0.1:{self.port}/api/providers/config"
+        req_cfg = request.Request(
+            url_cfg,
+            data=json.dumps({"provider": "groq", "config": {"api_key": "gsk_test_key_123"}}).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with request.urlopen(req_cfg) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data.get("success"))
+
+        # 3. Switch back to agy
+        req_back = request.Request(
+            url_select,
+            data=json.dumps({"provider": "agy"}).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with request.urlopen(req_back) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data.get("active_provider"), "agy")
+
     def test_process_empty_prompt(self) -> None:
         """Verify 400 Bad Request when prompt is empty."""
         url = f"http://127.0.0.1:{self.port}/api/process"

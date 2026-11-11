@@ -1,7 +1,7 @@
 name: "Françoise (Antigravity agy)"
 slug: "chassitant_agy"
-description: "Chatbot IA avec Drawer rétractable, Guide contextuel & raccourcis HA_CONTEXT.md, Google Antigravity agy et serveur MCP Home Assistant pré-embarqué."
-version: "1.7.1"
+description: "Chatbot IA autonome Home Assistant (Google Antigravity agy, Groq, OpenRouter, Ollama) avec Drawer, raccourcis HA_CONTEXT.md et serveur MCP embarqué."
+version: "1.8.0"
 startup: application
 boot: auto
 init: false
@@ -23,6 +23,10 @@ map:
   - share:rw
 options:
   port: 8099
+  provider: "agy"
+  groq_api_key: ""
+  openrouter_api_key: ""
+  ollama_url: "http://localhost:11434/v1"
   model: "default"
   effort: "low"
   pre_prompt: |
@@ -42,6 +46,10 @@ options:
   dangerously_skip_permissions: true
 schema:
   port: "int"
+  provider: "list(agy|groq|openrouter|ollama)?"
+  groq_api_key: "password?"
+  openrouter_api_key: "password?"
+  ollama_url: "str?"
   model: "str?"
   effort: "list(low|medium|high|xhigh|max)?"
   pre_prompt: "str?"

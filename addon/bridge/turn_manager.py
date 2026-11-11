@@ -161,6 +161,7 @@ class TurnManager:
         effort: Optional[str] = None,
         timeout: int = 300,
         pre_prompt: Optional[str] = None,
+        provider: Optional[Any] = None,
     ) -> ActiveTurn:
         """Start a new background turn for a conversation."""
         with self._lock:
@@ -171,9 +172,10 @@ class TurnManager:
             turn = ActiveTurn(conv_id, prompt)
             self._turns[conv_id] = turn
 
+        active_prov = provider or agy_client
         thread = threading.Thread(
             target=self._run_worker,
-            args=(turn, agy_client, conv_store, conv_id, prompt, model, effort, timeout, pre_prompt),
+            args=(turn, active_prov, conv_store, conv_id, prompt, model, effort, timeout, pre_prompt),
             daemon=True,
             name=f"TurnWorker-{conv_id[:8]}",
         )
@@ -183,7 +185,7 @@ class TurnManager:
     def _run_worker(
         self,
         turn: ActiveTurn,
-        agy_client: Any,
+        provider: Any,
         conv_store: Any,
         conv_id: str,
         prompt: str,
@@ -192,7 +194,7 @@ class TurnManager:
         timeout: int,
         pre_prompt: Optional[str] = None,
     ) -> None:
-        """Worker thread executing the turn via agy stream."""
+        """Worker thread executing the turn via provider stream."""
         conv = conv_store.get_conversation(conv_id)
         target_agy_id = conv.get("agy_conversation_id") if conv else None
 
@@ -202,23 +204,37 @@ class TurnManager:
             effective_prompt = f"[Consignes système / Pré-prompt de l'utilisateur : {pre_prompt.strip()}]\n\n{prompt}"
             logger.info("Injected pre-prompt for first turn of conversation %s", conv_id)
 
-        logger.info("Turn worker started for conv %s (agy_id=%s): '%s...'", conv_id, target_agy_id, prompt[:40])
+        logger.info("Turn worker started for conv %s: '%s...'", conv_id, prompt[:40])
         steps_log: List[Dict[str, Any]] = []
         full_text = ""
         final_tokens = None
         final_duration = None
 
         try:
-            for event in agy_client.process_stream(
-                prompt=effective_prompt,
-                conversation_id=target_agy_id,
-                model=model,
-                effort=effort,
-                dangerously_skip_permissions=True,
-                timeout=timeout,
-                on_proc_started=turn.set_process,
-                cancel_event=turn._cancelled,
-            ):
+            try:
+                stream_iter = provider.process_stream(
+                    prompt=effective_prompt,
+                    conversation_id=target_agy_id,
+                    model=model,
+                    effort=effort,
+                    timeout=timeout,
+                    pre_prompt=pre_prompt,
+                    on_proc_started=turn.set_process,
+                    cancel_event=turn._cancelled,
+                )
+            except TypeError:
+                stream_iter = provider.process_stream(
+                    prompt=effective_prompt,
+                    conversation_id=target_agy_id,
+                    model=model,
+                    effort=effort,
+                    dangerously_skip_permissions=True,
+                    timeout=timeout,
+                    on_proc_started=turn.set_process,
+                    cancel_event=turn._cancelled,
+                )
+
+            for event in stream_iter:
                 if turn.is_cancelled:
                     logger.info("Turn %s marked cancelled during stream; exiting worker loop", conv_id)
                     break

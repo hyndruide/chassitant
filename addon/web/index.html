@@ -182,7 +182,7 @@
         <button class="modal-tab active" data-tab="tab-auth">Google & Auth</button>
         <button class="modal-tab" data-tab="tab-inventory">Données & Raccourcis HA</button>
         <button class="modal-tab" data-tab="tab-mcp">Outils MCP Home Assistant</button>
-        <button class="modal-tab" data-tab="tab-model">Modèle & Options</button>
+        <button class="modal-tab" data-tab="tab-model">Fournisseur IA & Modèle</button>
         <button class="modal-tab" data-tab="tab-about">À propos</button>
       </div>
 
@@ -324,13 +324,45 @@
         <!-- Tab 3: Model & Options -->
         <div id="tab-model" class="tab-pane">
           <div class="form-group">
+            <label class="form-label">Fournisseur d'Intelligence Artificielle (Moteur)</label>
+            <select id="select-provider" class="form-select">
+              <option value="agy">🟣 Google Antigravity (Compte Google, Quota gratuit Gemini)</option>
+              <option value="groq">⚡ Groq (Llama 3.3 70B Gratuit & Ultra-rapide)</option>
+              <option value="openrouter">🌐 OpenRouter (DeepSeek R1 :free & multi-modèles)</option>
+              <option value="ollama">🦙 Ollama (Modèles locaux 100% gratuits & privés)</option>
+            </select>
+            <span id="provider-desc-help" class="form-help">Sélectionnez le moteur IA qui exécutera vos requêtes et automatisations.</span>
+          </div>
+
+          <!-- Provider Specific Config Boxes -->
+          <div id="provider-config-groq" class="provider-config-box" style="display: none;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 12px;">Clé d'API Groq (Gratuite sur <a href="https://console.groq.com/keys" target="_blank" style="color: #60a5fa;">console.groq.com</a>)</label>
+              <input type="password" id="input-groq-key" class="form-input" placeholder="gsk_..." />
+              <span class="form-help" style="font-size: 11px;">Inscription 100% gratuite sans carte bancaire requise (30 requêtes/min permanentes).</span>
+            </div>
+          </div>
+
+          <div id="provider-config-openrouter" class="provider-config-box" style="display: none;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 12px;">Clé d'API OpenRouter (Gratuite sur <a href="https://openrouter.ai/keys" target="_blank" style="color: #60a5fa;">openrouter.ai</a>)</label>
+              <input type="password" id="input-openrouter-key" class="form-input" placeholder="sk-or-v1-..." />
+              <span class="form-help" style="font-size: 11px;">Permet d'utiliser gratuitement les modèles <code>:free</code> (ex: DeepSeek R1, Llama 3.3).</span>
+            </div>
+          </div>
+
+          <div id="provider-config-ollama" class="provider-config-box" style="display: none;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" style="font-size: 12px;">URL de l'API Ollama locale</label>
+              <input type="text" id="input-ollama-url" class="form-input" value="http://localhost:11434/v1" placeholder="http://192.168.1.XX:11434/v1" />
+              <span class="form-help" style="font-size: 11px;">Adresse et port de votre serveur Ollama (le chemin doit se terminer par <code>/v1</code>).</span>
+            </div>
+          </div>
+
+          <div class="form-group">
             <label class="form-label">Modèle d'Intelligence Artificielle</label>
             <select id="select-model" class="form-select">
               <option value="default">Par défaut (Recommandé)</option>
-              <option value="gemini-2.5-flash">Gemini 2.5 Flash (Ultra-rapide)</option>
-              <option value="gemini-2.5-pro">Gemini 2.5 Pro (Raisonnement avancé)</option>
-              <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
-              <option value="claude-3-7-sonnet">Claude 3.7 Sonnet</option>
             </select>
           </div>
 
@@ -360,7 +392,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.7.1</h3>
+            <h3>Françoise v1.8.0</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

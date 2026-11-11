@@ -1148,6 +1148,16 @@ html, body {
   line-height: 1.4;
 }
 
+.provider-config-box {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  margin-top: -6px;
+  margin-bottom: 8px;
+  animation: fadeIn 0.2s ease;
+}
+
 .auth-card {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);

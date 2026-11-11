@@ -75,6 +75,8 @@
         return saved !== null ? saved : DEFAULT_PRE_PROMPT;
       })(),
     },
+    providersList: [],
+    activeProviderId: 'agy',
     authStatus: { authenticated: false, message: '' },
     mcpServers: [],
     activeStreamAbortController: null,
@@ -122,6 +124,14 @@
     settingsModal: document.getElementById('settings-modal'),
     btnCloseModal: document.getElementById('btn-close-modal'),
     btnSaveSettings: document.getElementById('btn-save-settings'),
+    selectProvider: document.getElementById('select-provider'),
+    providerConfigGroq: document.getElementById('provider-config-groq'),
+    providerConfigOpenRouter: document.getElementById('provider-config-openrouter'),
+    providerConfigOllama: document.getElementById('provider-config-ollama'),
+    inputGroqKey: document.getElementById('input-groq-key'),
+    inputOpenRouterKey: document.getElementById('input-openrouter-key'),
+    inputOllamaUrl: document.getElementById('input-ollama-url'),
+    providerDescHelp: document.getElementById('provider-desc-help'),
     selectModel: document.getElementById('select-model'),
     selectEffort: document.getElementById('select-effort'),
     inputTimeout: document.getElementById('input-timeout'),
@@ -1355,9 +1365,51 @@
       });
     });
 
+    // Provider Selector change
+    if (el.selectProvider) {
+      el.selectProvider.addEventListener('change', () => {
+        const chosen = el.selectProvider.value;
+        updateProviderUiVisibility(chosen);
+        renderProviderModels(chosen);
+      });
+    }
+
     // Save Settings
     el.btnSaveSettings.addEventListener('click', async () => {
-      state.settings.model = el.selectModel.value;
+      // Save active provider & specific configs
+      if (el.selectProvider) {
+        const chosenProvider = el.selectProvider.value;
+        state.activeProviderId = chosenProvider;
+        try {
+          await apiCall('/api/providers/select', {
+            method: 'POST',
+            body: JSON.stringify({ provider: chosenProvider }),
+          });
+
+          const configPayload = {};
+          if (chosenProvider === 'groq' && el.inputGroqKey && el.inputGroqKey.value) {
+            configPayload.api_key = el.inputGroqKey.value.trim();
+          } else if (chosenProvider === 'openrouter' && el.inputOpenRouterKey && el.inputOpenRouterKey.value) {
+            configPayload.api_key = el.inputOpenRouterKey.value.trim();
+          } else if (chosenProvider === 'ollama' && el.inputOllamaUrl && el.inputOllamaUrl.value) {
+            configPayload.url = el.inputOllamaUrl.value.trim();
+          }
+          if (el.selectModel && el.selectModel.value) {
+            configPayload.model = el.selectModel.value;
+          }
+
+          if (Object.keys(configPayload).length > 0) {
+            await apiCall('/api/providers/config', {
+              method: 'POST',
+              body: JSON.stringify({ provider: chosenProvider, config: configPayload }),
+            });
+          }
+        } catch (err) {
+          console.debug('Failed to update provider:', err);
+        }
+      }
+
+      state.settings.model = el.selectModel ? el.selectModel.value : 'default';
       state.settings.effort = el.selectEffort.value;
       state.settings.timeout = parseInt(el.inputTimeout.value || '300', 10);
       if (el.inputPrePrompt) {
@@ -1456,8 +1508,64 @@
     }
   }
 
+  function updateProviderUiVisibility(providerId) {
+    if (el.providerConfigGroq) el.providerConfigGroq.style.display = providerId === 'groq' ? 'block' : 'none';
+    if (el.providerConfigOpenRouter) el.providerConfigOpenRouter.style.display = providerId === 'openrouter' ? 'block' : 'none';
+    if (el.providerConfigOllama) el.providerConfigOllama.style.display = providerId === 'ollama' ? 'block' : 'none';
+  }
+
+  function renderProviderModels(providerId, selectedModel = null) {
+    if (!el.selectModel) return;
+    const prov = (state.providersList || []).find((p) => p.id === providerId);
+    const models = prov?.models || [];
+    if (models.length > 0) {
+      el.selectModel.innerHTML = models.map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.name)}</option>`).join('');
+    } else {
+      el.selectModel.innerHTML = '<option value="default">Par défaut (Recommandé)</option>';
+    }
+    if (selectedModel) {
+      el.selectModel.value = selectedModel;
+    }
+  }
+
+  async function loadProviders() {
+    try {
+      const res = await apiCall('/api/providers');
+      if (res && res.success && res.providers) {
+        state.providersList = res.providers;
+        state.activeProviderId = res.active_provider || 'agy';
+
+        if (el.selectProvider) {
+          el.selectProvider.value = state.activeProviderId;
+          updateProviderUiVisibility(state.activeProviderId);
+          renderProviderModels(state.activeProviderId, state.settings.model);
+        }
+
+        const groqProv = res.providers.find((p) => p.id === 'groq');
+        if (groqProv && groqProv.config?.api_key_set && el.inputGroqKey && !el.inputGroqKey.value) {
+          el.inputGroqKey.placeholder = '•••••••••••••••••••• (Clé enregistrée)';
+        }
+        const orProv = res.providers.find((p) => p.id === 'openrouter');
+        if (orProv && orProv.config?.api_key_set && el.inputOpenRouterKey && !el.inputOpenRouterKey.value) {
+          el.inputOpenRouterKey.placeholder = '•••••••••••••••••••• (Clé enregistrée)';
+        }
+        const ollamaProv = res.providers.find((p) => p.id === 'ollama');
+        if (ollamaProv && ollamaProv.config?.base_url && el.inputOllamaUrl) {
+          el.inputOllamaUrl.value = ollamaProv.config.base_url;
+        }
+
+        updateModelBadges();
+      }
+    } catch (e) {
+      console.debug('Failed loading providers:', e);
+    }
+  }
+
   function openSettings(activeTabId = null) {
-    el.selectModel.value = state.settings.model;
+    if (el.selectProvider) el.selectProvider.value = state.activeProviderId || 'agy';
+    updateProviderUiVisibility(state.activeProviderId || 'agy');
+    renderProviderModels(state.activeProviderId || 'agy', state.settings.model);
+
     el.selectEffort.value = state.settings.effort;
     el.inputTimeout.value = state.settings.timeout;
     if (el.inputPrePrompt) {
@@ -1769,16 +1877,24 @@
   }
 
   function updateModelBadges() {
+    let provPrefix = '';
+    if (state.activeProviderId === 'groq') provPrefix = '⚡ Groq: ';
+    else if (state.activeProviderId === 'openrouter') provPrefix = '🌐 OpenRouter: ';
+    else if (state.activeProviderId === 'ollama') provPrefix = '🦙 Ollama: ';
+    else provPrefix = '✨ ';
+
     const modelLabels = {
-      'default': 'Gemini 3.8 Flash',
+      'default': state.activeProviderId === 'agy' ? 'Gemini 3.8 Flash' : 'Par défaut',
       'gemini-2.5-flash': 'Gemini 2.5 Flash',
       'gemini-2.5-pro': 'Gemini 2.5 Pro',
-      'claude-3-5-sonnet': 'Claude 3.5 Sonnet',
-      'claude-3-7-sonnet': 'Claude 3.7 Sonnet',
+      'llama-3.3-70b-versatile': 'Llama 3.3 70B',
+      'deepseek/deepseek-r1:free': 'DeepSeek R1',
+      'llama3.2': 'Llama 3.2',
     };
-    const label = modelLabels[state.settings.model] || state.settings.model;
-    el.topbarModelText.textContent = label;
-    el.activeModelHint.textContent = `Modèle : ${label}`;
+    const chosen = state.settings.model || 'default';
+    const label = modelLabels[chosen] || chosen.split('/').pop();
+    el.topbarModelText.textContent = `${provPrefix}${label}`;
+    el.activeModelHint.textContent = `Moteur : ${provPrefix}${label}`;
     updateEffortBadge();
   }
 
@@ -1964,6 +2080,7 @@
     initSettingsModal();
     initEventListeners();
     updateModelBadges();
+    loadProviders();
 
     try {
       const serverSettings = await apiCall('/api/settings');
