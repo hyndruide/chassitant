@@ -76,14 +76,21 @@ class CodexProvider(BaseProvider):
         if self.api_key or os.getenv("OPENAI_API_KEY"):
             return True, "Clé API OpenAI configurée !"
 
+        codex_home = Path("/data/.codex") if os.path.isdir("/data/.codex") else Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+
         # 2. Check login status via `codex login status`
         try:
+            env = os.environ.copy()
+            env["CODEX_HOME"] = str(codex_home)
+            env.pop("OPENAI_API_KEY", None)
+            env.pop("CODEX_API_KEY", None)
             res = subprocess.run(
                 [self.binary_path, "login", "status"],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
                 check=False,
+                env=env,
             )
             out = (res.stdout or "").strip()
             err = (res.stderr or "").strip()
@@ -94,10 +101,11 @@ class CodexProvider(BaseProvider):
         except Exception as ex:
             logger.debug("codex login status failed: %s", ex)
 
-        # 3. Check auth.json in ~/.codex or /data/.codex
-        codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-        if (codex_home / "auth.json").is_file():
-            return True, "Session ChatGPT active !"
+        # 3. Check auth.json in persistent or standard directories
+        for candidate_dir in [codex_home, Path("/data/.codex"), Path.home() / ".codex", Path("/root/.codex")]:
+            auth_file = candidate_dir / "auth.json"
+            if auth_file.is_file() and auth_file.stat().st_size > 10:
+                return True, "Session ChatGPT active !"
 
         return False, (
             "Codex CLI n'est pas encore authentifié. "
@@ -132,6 +140,9 @@ class CodexProvider(BaseProvider):
                 flags.append("--dangerously-bypass-approvals-and-sandbox")
             elif "--yolo" in help_text:
                 flags.append("--yolo")
+
+            if "--ephemeral" in help_text:
+                flags.append("--ephemeral")
         except Exception as ex:
             logger.debug("Failed to query codex exec --help: %s", ex)
             flags.append("--dangerously-bypass-approvals-and-sandbox")
@@ -186,10 +197,19 @@ class CodexProvider(BaseProvider):
         start_time = time.time()
 
         env = os.environ.copy()
-        if self.api_key:
-            env["OPENAI_API_KEY"] = self.api_key
-        if "CODEX_HOME" not in env:
+        if os.path.isdir("/data/.codex"):
+            env["CODEX_HOME"] = "/data/.codex"
+        elif "CODEX_HOME" not in env:
             env["CODEX_HOME"] = str(Path.home() / ".codex")
+
+        if os.path.isdir("/root"):
+            env["HOME"] = "/root"
+
+        if self.api_key and self.api_key.strip():
+            env["OPENAI_API_KEY"] = self.api_key.strip()
+        else:
+            env.pop("OPENAI_API_KEY", None)
+            env.pop("CODEX_API_KEY", None)
 
         try:
             proc = subprocess.Popen(
@@ -273,17 +293,16 @@ class CodexProvider(BaseProvider):
                 # Check for 401 Unauthorized / missing authentication
                 if "401" in err_details or "Unauthorized" in err_details or "Missing bearer" in err_details:
                     friendly_err = (
-                        "⚠️ **Compte ChatGPT non connecté dans Codex CLI**\n\n"
-                        "L'API OpenAI a renvoyé l'erreur `401 Unauthorized : Missing bearer or basic authentication` "
-                        "car aucun compte n'est actuellement authentifié sur cette machine.\n\n"
-                        "👉 **Pour vous connecter avec votre compte ChatGPT (gratuit/quota inclus) :**\n"
-                        "1. Ouvrez l'onglet **Terminal** dans le panneau latéral (ou dans les Paramètres).\n"
-                        "2. Tapez la commande suivante :\n"
+                        "⚠️ **Session ChatGPT déconnectée ou expirée dans Codex CLI**\n\n"
+                        "L'API OpenAI a renvoyé l'erreur `401 Unauthorized : Missing bearer or basic authentication`.\n\n"
+                        "👉 **Pour renouveler ou reconnecter votre compte ChatGPT :**\n"
+                        "1. Ouvrez l'onglet **Connexion & Terminal**.\n"
+                        "2. Exécutez la commande suivante :\n"
                         "   ```bash\n"
-                        "   codex login --device-auth\n"
+                        "   codex logout && codex login --device-auth\n"
                         "   ```\n"
-                        "3. Ouvrez le lien d'autorisation affiché (ex: `https://auth.openai.com/device`) sur votre téléphone ou PC et saisissez le code.\n"
-                        "4. Une fois validé, revenez dans le chat : Codex utilisera immédiatement votre compte ChatGPT !\n\n"
+                        "3. Ouvrez le lien affiché (ex: `https://auth.openai.com/device`) sur votre téléphone ou PC et saisissez le code.\n"
+                        "4. Une fois validé, revenez dans le chat : votre session sera active et enregistrée de façon permanente !\n\n"
                         "*(Alternative : vous pouvez aussi renseigner une clé API OpenAI dans les Paramètres)*"
                     )
                     yield {"type": "error", "error": friendly_err}

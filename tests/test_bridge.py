@@ -221,6 +221,16 @@ class TestBridgeServer(unittest.TestCase):
         # Prompt must be the very last element
         self.assertEqual(cmd[-1], "Hello assistant")
 
+    def test_codex_provider_env_and_flags(self) -> None:
+        """Verify CodexProvider sanitizes environment variables and recognizes flags."""
+        from bridge.providers.codex_provider import CodexProvider
+        provider = CodexProvider(binary_path="/usr/local/bin/codex", api_key="")
+        provider._cached_flags = ["--ephemeral", "--dangerously-bypass-approvals-and-sandbox"]
+        cmd = provider.build_command("Test prompt", model="default")
+        self.assertEqual(cmd[-1], "Test prompt")
+        self.assertIn("--ephemeral", cmd)
+        self.assertNotIn("--model", cmd)
+
 
 if __name__ == "__main__":
     unittest.main()

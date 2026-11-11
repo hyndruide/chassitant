@@ -31,8 +31,19 @@ if [ ! -L /root/.gemini ]; then
     ln -sfn /data/.gemini /root/.gemini
 fi
 
-# Symlink ~/.codex to /data/.codex for OpenAI Codex permanent persistence
+# Persistent directory and file-based credentials for OpenAI Codex
 mkdir -p /data/.codex
+chmod 700 /data/.codex 2>/dev/null || true
+if [ ! -f /data/.codex/config.toml ]; then
+    cat << 'EOF' > /data/.codex/config.toml
+cli_auth_credentials_store = "file"
+EOF
+elif ! grep -q "cli_auth_credentials_store" /data/.codex/config.toml; then
+    echo 'cli_auth_credentials_store = "file"' >> /data/.codex/config.toml
+fi
+chmod 600 /data/.codex/config.toml 2>/dev/null || true
+
+# Symlink ~/.codex to /data/.codex for OpenAI Codex permanent persistence
 if [ ! -L /root/.codex ]; then
     if [ -d /root/.codex ]; then
         cp -rn /root/.codex/* /data/.codex/ 2>/dev/null || true
@@ -60,7 +71,7 @@ if [ -f /data/HA_CONTEXT.md ]; then
 fi
 
 export HOME="/root"
-export CODEX_HOME="/root/.codex"
+export CODEX_HOME="/data/.codex"
 export PATH="/usr/local/bin:/root/.local/bin:/root/bin:$PATH"
 export CHASSITANT_DATA_DIR="/data"
 export INGRESS_PORT="${INGRESS_PORT:-8098}"
