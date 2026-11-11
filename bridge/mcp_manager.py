@@ -143,7 +143,10 @@ class McpManager:
             except Exception as err:
                 logger.warning("Could not write MCP config to %s: %s", config_path, err)
 
-        # 2. Also register via agy CLI if available
+        # 2. Write configuration into Codex CLI config.toml
+        self._update_codex_config_toml(ha_url, supervisor_token)
+
+        # 3. Also register via agy CLI if available
         cli_registered = False
         if self.agy_binary and shutil.which(self.agy_binary):
             try:
@@ -180,8 +183,97 @@ class McpManager:
             except Exception as cli_err:
                 logger.debug("agy mcp add notice: %s", cli_err)
 
-        msg = "Serveur MCP Home Assistant configuré avec succès (~80+ outils actifs)."
+        # 4. Also register via codex CLI if available
+        codex_binary = shutil.which("codex") or "/usr/local/bin/codex"
+        if os.path.isfile(codex_binary):
+            try:
+                codex_env = os.environ.copy()
+                if os.path.isdir("/data/.codex"):
+                    codex_env["CODEX_HOME"] = "/data/.codex"
+                cmd_codex = [
+                    codex_binary,
+                    "mcp",
+                    "add",
+                    "homeassistant",
+                    "--command",
+                    "ha-mcp",
+                    "--env",
+                    f"HOMEASSISTANT_URL={ha_url}",
+                    "--env",
+                    f"HOMEASSISTANT_TOKEN={supervisor_token}",
+                    "--env",
+                    "ENABLE_MANDATORY_BPS=false",
+                    "--env",
+                    "ENABLE_STRICT_MANDATORY_BPS=false",
+                    "--env",
+                    "DISABLED_TOOLS=ha_get_overview,ha_get_automation_traces,ha_get_camera_image",
+                ]
+                subprocess.run(cmd_codex, capture_output=True, text=True, timeout=8, check=False, env=codex_env)
+            except Exception as codex_err:
+                logger.debug("codex mcp add notice: %s", codex_err)
+
+        msg = "Serveur MCP Home Assistant configuré avec succès (~80+ outils actifs pour agy et Codex)."
         return True, msg
+
+    def _update_codex_config_toml(self, ha_url: str, token: str) -> None:
+        """Write homeassistant MCP server configuration into Codex config.toml."""
+        codex_dirs = [
+            Path("/data/.codex"),
+            Path("/root/.codex"),
+            self.home_dir / ".codex",
+        ]
+        seen_files = set()
+        for cdir in codex_dirs:
+            try:
+                cdir.mkdir(parents=True, exist_ok=True)
+                cfg_file = cdir / "config.toml"
+                resolved = cfg_file.resolve()
+                if resolved in seen_files:
+                    continue
+                seen_files.add(resolved)
+
+                lines: List[str] = []
+                if cfg_file.is_file():
+                    content = cfg_file.read_text(encoding="utf-8")
+                    in_ha_section = False
+                    for line in content.splitlines():
+                        stripped = line.strip()
+                        if stripped.startswith("[mcp_servers.homeassistant"):
+                            in_ha_section = True
+                            continue
+                        elif in_ha_section and stripped.startswith("["):
+                            in_ha_section = False
+                        if not in_ha_section:
+                            lines.append(line)
+
+                text_without_ha = "\n".join(lines).strip()
+                if "cli_auth_credentials_store" not in text_without_ha:
+                    base_text = 'cli_auth_credentials_store = "file"\n\n' + text_without_ha
+                else:
+                    base_text = text_without_ha
+
+                ha_section = f"""
+
+[mcp_servers.homeassistant]
+command = "ha-mcp"
+args = []
+
+[mcp_servers.homeassistant.env]
+HOMEASSISTANT_URL = "{ha_url}"
+HOMEASSISTANT_TOKEN = "{token}"
+ENABLE_MANDATORY_BPS = "false"
+ENABLE_STRICT_MANDATORY_BPS = "false"
+DISABLED_TOOLS = "ha_get_overview,ha_get_automation_traces,ha_get_camera_image"
+"""
+                new_content = (base_text.strip() + ha_section).strip() + "\n"
+                cfg_file.write_text(new_content, encoding="utf-8")
+                try:
+                    os.chmod(cfg_file, 0o600)
+                except Exception:
+                    pass
+                logger.info("Saved homeassistant MCP into Codex config: %s", cfg_file)
+            except Exception as err:
+                logger.warning("Could not write Codex MCP config to %s: %s", cdir, err)
 
     def list_mcp_servers(self) -> List[Dict[str, Any]]:
         """List configured MCP servers and their status."""
