@@ -141,8 +141,12 @@
     btnReloadTerminal: document.getElementById('btn-reload-terminal'),
     terminalFrame: document.getElementById('terminal-frame'),
     btnCheckAuth: document.getElementById('btn-check-auth'),
+    tabButtonAuth: document.getElementById('tab-button-auth'),
+    authModalTitle: document.getElementById('auth-modal-title'),
     authModalBadge: document.getElementById('auth-modal-badge'),
     authModalDesc: document.getElementById('auth-modal-desc'),
+    authTerminalLabel: document.getElementById('auth-terminal-label'),
+    authTerminalHelp: document.getElementById('auth-terminal-help'),
     btnConnectMcp: document.getElementById('btn-connect-mcp'),
     btnConnectMcpText: document.getElementById('btn-connect-mcp-text'),
     inputMcpUrl: document.getElementById('input-mcp-url'),
@@ -1496,6 +1500,17 @@
       localStorage.setItem('chassitant_timeout', state.settings.timeout.toString());
 
       updateModelBadges();
+      refreshAuthStatus();
+
+      // Automatically reload terminal with new active provider onboarding
+      if (el.terminalFrame) {
+        const baseSrc = el.terminalFrame.src ? el.terminalFrame.src.split('?')[0] : 'terminal/';
+        el.terminalFrame.src = 'about:blank';
+        setTimeout(() => {
+          el.terminalFrame.src = baseSrc + '?t=' + Date.now();
+        }, 150);
+      }
+
       closeSettings();
     });
 
@@ -1830,7 +1845,9 @@
       const data = await apiCall('/api/auth/status');
       state.authStatus = data;
 
-      const isOk = data.authenticated;
+      const isOk = !!data.authenticated;
+      const activePid = data.active_provider || state.activeProviderId || 'agy';
+      const provName = data.provider_name || activePid;
       const msg = data.message || (isOk ? 'Connecté' : 'Non connecté');
 
       // Update Topbar
@@ -1838,19 +1855,88 @@
         el.topbarAuthDot.className = `status-indicator ${isOk ? 'online' : 'offline'}`;
       }
       if (el.topbarAuthLabel) {
-        el.topbarAuthLabel.textContent = isOk ? 'Google Actif' : 'Connexion Google';
+        if (activePid === 'codex') {
+          el.topbarAuthLabel.textContent = isOk ? 'ChatGPT Actif' : 'ChatGPT Auth';
+        } else if (activePid === 'agy') {
+          el.topbarAuthLabel.textContent = isOk ? 'Google Actif' : 'Google Auth';
+        } else {
+          el.topbarAuthLabel.textContent = isOk ? `${activePid.toUpperCase()} OK` : `${activePid.toUpperCase()} Config`;
+        }
       }
 
       // Update Drawer Pill
-      el.drawerAuthDot.className = `status-indicator ${isOk ? 'online' : 'offline'}`;
-      el.drawerAuthText.textContent = isOk ? 'Google Actif' : 'Non connecté';
+      if (el.drawerAuthDot) {
+        el.drawerAuthDot.className = `status-indicator ${isOk ? 'online' : 'offline'}`;
+      }
+      if (el.drawerAuthText) {
+        if (activePid === 'codex') {
+          el.drawerAuthText.textContent = isOk ? 'ChatGPT Actif' : 'ChatGPT Auth';
+        } else if (activePid === 'agy') {
+          el.drawerAuthText.textContent = isOk ? 'Google Actif' : 'Google Auth';
+        } else {
+          el.drawerAuthText.textContent = isOk ? `${activePid.toUpperCase()} Prêt` : 'Non configuré';
+        }
+      }
 
       // Update Modal
-      el.authModalBadge.className = `auth-status-tag ${isOk ? 'ok' : 'ko'}`;
-      el.authModalBadge.textContent = isOk ? 'Authentifié' : 'Connexion requise';
-      el.authModalDesc.textContent = isOk
-        ? 'Votre session Google Antigravity est active et enregistrée de façon permanente.'
-        : 'Session Google inactive. Suivez les instructions dans le terminal Ingress ci-dessous pour vous connecter.';
+      if (el.authModalBadge) {
+        el.authModalBadge.className = `auth-status-tag ${isOk ? 'ok' : 'ko'}`;
+        el.authModalBadge.textContent = isOk ? 'Authentifié' : 'Connexion requise';
+      }
+
+      if (el.tabButtonAuth) {
+        if (activePid === 'codex') {
+          el.tabButtonAuth.textContent = 'Connexion & Terminal (ChatGPT)';
+        } else if (activePid === 'agy') {
+          el.tabButtonAuth.textContent = 'Connexion & Terminal (Google)';
+        } else {
+          el.tabButtonAuth.textContent = 'Connexion & Terminal';
+        }
+      }
+
+      if (el.authModalTitle) {
+        if (activePid === 'codex') {
+          el.authModalTitle.textContent = 'Session OpenAI Codex CLI (ChatGPT)';
+        } else if (activePid === 'agy') {
+          el.authModalTitle.textContent = 'Session Google Antigravity (agy)';
+        } else {
+          el.authModalTitle.textContent = `Session ${provName}`;
+        }
+      }
+
+      if (el.authModalDesc) {
+        if (activePid === 'codex') {
+          el.authModalDesc.textContent = isOk
+            ? 'Votre session ChatGPT est active et enregistrée de façon permanente dans /data/.codex.'
+            : 'Session ChatGPT inactive. Suivez les instructions dans le terminal Ingress ci-dessous pour associer votre compte via codex login --device-auth.';
+        } else if (activePid === 'agy') {
+          el.authModalDesc.textContent = isOk
+            ? 'Votre session Google Antigravity est active et enregistrée de façon permanente.'
+            : 'Session Google inactive. Suivez les instructions dans le terminal Ingress ci-dessous pour vous connecter.';
+        } else {
+          el.authModalDesc.textContent = msg;
+        }
+      }
+
+      if (el.authTerminalLabel) {
+        if (activePid === 'codex') {
+          el.authTerminalLabel.textContent = "🖥️ Terminal d'Authentification OpenAI Codex (Ingress)";
+        } else if (activePid === 'agy') {
+          el.authTerminalLabel.textContent = "🖥️ Terminal de Connexion Google (Ingress)";
+        } else {
+          el.authTerminalLabel.textContent = "🖥️ Terminal Interactif Ingress";
+        }
+      }
+
+      if (el.authTerminalHelp) {
+        if (activePid === 'codex') {
+          el.authTerminalHelp.innerHTML = '👉 <strong>Comment faire :</strong> Dans le terminal ci-dessus, le système lance automatiquement <code>codex login --device-auth</code>. Ouvrez le lien d\'autorisation OpenAI affiché sur votre smartphone ou PC et entrez le code pour associer votre compte ChatGPT.';
+        } else if (activePid === 'agy') {
+          el.authTerminalHelp.innerHTML = '👉 <strong>Comment faire :</strong> Dans le terminal ci-dessus, ouvrez le lien Google affiché, autorisez votre compte Google, puis collez le code d\'autorisation directement dans le terminal et appuyez sur Entrée.';
+        } else {
+          el.authTerminalHelp.innerHTML = '👉 Utilisez ce terminal interactif pour exécuter des commandes système ou gérer vos environnements.';
+        }
+      }
     } catch (err) {
       console.error('Failed to check auth:', err);
     }

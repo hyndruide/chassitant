@@ -46,7 +46,7 @@
         <div class="footer-status-pill">
           <span style="display:flex; align-items:center;">
             <span id="drawer-auth-dot" class="status-indicator offline"></span>
-            <span id="drawer-auth-text">Google Auth...</span>
+            <span id="drawer-auth-text">Connexion...</span>
           </span>
           <button id="btn-drawer-mcp" class="btn-drawer-mcp" title="Gérer la connexion MCP">
             <span id="drawer-mcp-dot" class="status-indicator offline" style="margin: 0;"></span>
@@ -84,9 +84,9 @@
           <button id="btn-compact-conv" class="btn-topbar-action desktop-only" style="font-size: 13px;" title="Compacter le contexte de cette conversation pour accélérer les réponses">
             🧹
           </button>
-          <button id="btn-open-auth" class="badge-tag desktop-only" style="cursor: pointer; background: transparent; border: 1px solid var(--border-color);" title="Connexion Google">
+          <button id="btn-open-auth" class="badge-tag desktop-only" style="cursor: pointer; background: transparent; border: 1px solid var(--border-color);" title="Statut d'authentification">
             <span id="topbar-auth-dot" class="status-indicator offline" style="margin: 0;"></span>
-            <span id="topbar-auth-label">Google Auth</span>
+            <span id="topbar-auth-label">Connexion</span>
           </button>
           <button id="btn-topbar-mcp" class="badge-tag highlight desktop-only" style="cursor: pointer;" title="Statut et connexion au serveur MCP Home Assistant">
             <span id="topbar-mcp-dot" class="status-indicator offline" style="margin: 0;"></span>
@@ -179,7 +179,7 @@
       </div>
 
       <div class="modal-tabs">
-        <button class="modal-tab active" data-tab="tab-auth">Google & Auth</button>
+        <button class="modal-tab active" data-tab="tab-auth" id="tab-button-auth">Connexion & Terminal</button>
         <button class="modal-tab" data-tab="tab-inventory">Données & Raccourcis HA</button>
         <button class="modal-tab" data-tab="tab-mcp">Outils MCP Home Assistant</button>
         <button class="modal-tab" data-tab="tab-model">Fournisseur IA & Modèle</button>
@@ -187,21 +187,21 @@
       </div>
 
       <div class="modal-body">
-        <!-- Tab 1: Auth & Google (Terminal Ingress) -->
+        <!-- Tab 1: Auth & Terminal Ingress -->
         <div id="tab-auth" class="tab-pane active">
           <div class="auth-card">
             <div class="auth-header">
-              <strong>Session Google Antigravity</strong>
+              <strong id="auth-modal-title">Session d'authentification</strong>
               <span id="auth-modal-badge" class="auth-status-tag ko">Vérification...</span>
             </div>
             <p id="auth-modal-desc" class="form-help">
-              Connectez-vous directement avec votre compte Google via le terminal interactif Ingress ci-dessous. Dès que la session est validée, vos identifiants sont sauvegardés de manière permanente.
+              Connectez-vous via le terminal interactif Ingress ci-dessous. Dès que la session est validée, vos identifiants sont sauvegardés de manière permanente.
             </p>
           </div>
 
           <div class="form-group" style="margin-top: 4px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-              <label class="form-label" style="margin: 0;">🖥️ Terminal de Connexion Google (Ingress)</label>
+              <label id="auth-terminal-label" class="form-label" style="margin: 0;">🖥️ Terminal de Connexion (Ingress)</label>
               <button id="btn-reload-terminal" class="btn-secondary" style="font-size: 11px; padding: 3px 8px;">
                 🔄 Relancer le terminal
               </button>
@@ -209,8 +209,8 @@
             <div class="terminal-container" style="border: 1px solid var(--border-color); border-radius: var(--radius-md); overflow: hidden; background: #121417;">
               <iframe id="terminal-frame" src="terminal/" style="width: 100%; height: 380px; border: none; display: block;"></iframe>
             </div>
-            <span class="form-help">
-              👉 <strong>Comment faire :</strong> Dans le terminal ci-dessus, ouvrez le lien Google affiché, autorisez votre compte Google, puis collez le code d'autorisation directement dans le terminal et appuyez sur Entrée.
+            <span id="auth-terminal-help" class="form-help">
+              👉 <strong>Comment faire :</strong> Suivez les instructions affichées dans le terminal ci-dessus pour valider l'accès à votre compte.
             </span>
           </div>
 
@@ -405,7 +405,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.8.4</h3>
+            <h3>Françoise v1.8.5</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

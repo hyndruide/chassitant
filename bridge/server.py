@@ -369,7 +369,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.8.4",
+                    "version": "1.8.5",
                     "active_provider": active_prov.provider_id,
                     "provider_name": active_prov.display_name,
                     "agy_binary": self.agy_client.binary_path,
@@ -427,14 +427,18 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             self.send_json(HTTPStatus.OK, {"success": True, "models": models})
             return
 
-        # 6. Auth status
+        # 6. Auth status (active provider: agy, codex, etc.)
         if path == "/api/auth/status":
-            auth_ok, auth_msg = self.agy_client.check_auth(timeout=5)
+            active_prov = self.provider_factory.get_active_provider()
+            auth_ok, auth_msg = active_prov.check_auth(timeout=5)
             self.send_json(
                 HTTPStatus.OK,
                 {
                     "success": True,
+                    "active_provider": active_prov.provider_id,
+                    "provider_name": active_prov.display_name,
                     "authenticated": auth_ok,
+                    "agy_authenticated": auth_ok if active_prov.provider_id == "agy" else None,
                     "message": auth_msg,
                 },
             )
@@ -772,12 +776,24 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             self.send_json(status_code, res)
             return
 
-        # 5. Auth check
+        # 5. Auth check (checks active provider: agy, codex, groq, etc.)
         if path in ("/api/auth/check", "/api/auth/verify"):
             if not self.check_authorization():
                 return
-            auth_ok, auth_msg = self.agy_client.check_auth(timeout=5)
-            self.send_json(HTTPStatus.OK, {"success": True, "valid": True, "agy_authenticated": auth_ok, "message": auth_msg})
+            active_prov = self.provider_factory.get_active_provider()
+            auth_ok, auth_msg = active_prov.check_auth(timeout=5)
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "valid": True,
+                    "active_provider": active_prov.provider_id,
+                    "provider_name": active_prov.display_name,
+                    "authenticated": auth_ok,
+                    "agy_authenticated": auth_ok if active_prov.provider_id == "agy" else None,
+                    "message": auth_msg,
+                },
+            )
             return
 
         # 6. Save Gemini API key
