@@ -65,7 +65,8 @@ class AuthManager:
         self._config.setdefault("timeout", 60)
         self._config.setdefault("dangerously_skip_permissions", True)
         self._config.setdefault("default_model", "default")
-        self._config.setdefault("default_effort", "high")
+        self._config.setdefault("default_effort", "low")
+        self._config.setdefault("mcp_mode", "eco")
 
         # Export Gemini API key to environment if configured
         if self._config.get("gemini_api_key"):
@@ -133,6 +134,16 @@ class AuthManager:
     def set_default_effort(self, effort: str) -> None:
         """Store default reasoning effort."""
         self._config["default_effort"] = effort.strip()
+        self.save_config()
+
+    def get_mcp_mode(self) -> str:
+        """Return configured MCP tool mode ('eco' or 'full')."""
+        return self._config.get("mcp_mode", "eco")
+
+    def set_mcp_mode(self, mode: str) -> None:
+        """Store configured MCP tool mode ('eco' or 'full')."""
+        clean_mode = "full" if str(mode).strip().lower() == "full" else "eco"
+        self._config["mcp_mode"] = clean_mode
         self.save_config()
 
     def validate_token(self, token: Optional[str]) -> bool:

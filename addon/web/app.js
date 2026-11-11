@@ -74,6 +74,7 @@
         const saved = localStorage.getItem('chassitant_pre_prompt');
         return saved !== null ? saved : DEFAULT_PRE_PROMPT;
       })(),
+      mcpMode: localStorage.getItem('chassitant_mcp_mode') || 'eco',
     },
     providersList: [],
     activeProviderId: 'agy',
@@ -136,6 +137,7 @@
     providerDescHelp: document.getElementById('provider-desc-help'),
     selectModel: document.getElementById('select-model'),
     selectEffort: document.getElementById('select-effort'),
+    selectMcpMode: document.getElementById('select-mcp-mode'),
     inputTimeout: document.getElementById('input-timeout'),
     inputPrePrompt: document.getElementById('input-pre-prompt'),
     btnReloadTerminal: document.getElementById('btn-reload-terminal'),
@@ -1506,21 +1508,26 @@
       state.settings.model = el.selectModel ? el.selectModel.value : 'default';
       state.settings.effort = el.selectEffort.value;
       state.settings.timeout = parseInt(el.inputTimeout.value || '300', 10);
+      if (el.selectMcpMode) {
+        state.settings.mcpMode = el.selectMcpMode.value || 'eco';
+        localStorage.setItem('chassitant_mcp_mode', state.settings.mcpMode);
+      }
       if (el.inputPrePrompt) {
         state.settings.prePrompt = el.inputPrePrompt.value.trim();
         localStorage.setItem('chassitant_pre_prompt', state.settings.prePrompt);
-        try {
-          await apiCall('/api/settings', {
-            method: 'POST',
-            body: JSON.stringify({
-              pre_prompt: state.settings.prePrompt,
-              model: state.settings.model,
-              effort: state.settings.effort,
-            }),
-          });
-        } catch (e) {
-          console.debug('Failed to sync settings to server:', e);
-        }
+      }
+      try {
+        await apiCall('/api/settings', {
+          method: 'POST',
+          body: JSON.stringify({
+            pre_prompt: state.settings.prePrompt,
+            model: state.settings.model,
+            effort: state.settings.effort,
+            mcp_mode: state.settings.mcpMode,
+          }),
+        });
+      } catch (e) {
+        console.debug('Failed to sync settings to server:', e);
       }
 
       localStorage.setItem('chassitant_model', state.settings.model);
@@ -1529,6 +1536,7 @@
 
       updateModelBadges();
       refreshAuthStatus();
+      loadMcpServers();
 
       // Automatically reload terminal with new active provider onboarding
       if (el.terminalFrame) {
@@ -1676,6 +1684,7 @@
     updateProviderUiVisibility(state.activeProviderId || 'agy');
     renderProviderModels(state.activeProviderId || 'agy', state.settings.model);
 
+    if (el.selectMcpMode) el.selectMcpMode.value = state.settings.mcpMode || 'eco';
     el.selectEffort.value = state.settings.effort;
     el.inputTimeout.value = state.settings.timeout;
     if (el.inputPrePrompt) {
@@ -2274,8 +2283,13 @@
 
     try {
       const serverSettings = await apiCall('/api/settings');
-      if (serverSettings && serverSettings.pre_prompt && !localStorage.getItem('chassitant_pre_prompt')) {
-        state.settings.prePrompt = serverSettings.pre_prompt;
+      if (serverSettings) {
+        if (serverSettings.pre_prompt && !localStorage.getItem('chassitant_pre_prompt')) {
+          state.settings.prePrompt = serverSettings.pre_prompt;
+        }
+        if (serverSettings.mcp_mode && !localStorage.getItem('chassitant_mcp_mode')) {
+          state.settings.mcpMode = serverSettings.mcp_mode;
+        }
       }
     } catch (e) {
       // Optional settings fetch

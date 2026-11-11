@@ -390,6 +390,15 @@
           </div>
 
           <div class="form-group">
+            <label class="form-label">Profil d'outils MCP & Économie de tokens</label>
+            <select id="select-mcp-mode" class="form-select">
+              <option value="eco" selected>🌿 Mode Éco (~27 outils essentiels — Économise ~15 000 tokens/requête)</option>
+              <option value="full">🌐 Mode Complet (Tous les 79 outils Home Assistant actifs)</option>
+            </select>
+            <span class="form-help">Le Mode Éco masque les outils système rares (radios, sauvegardes, blueprints) pour diviser la latence par 3 et économiser massivement vos tokens. Rebasculable en mode complet à tout moment.</span>
+          </div>
+
+          <div class="form-group">
             <label class="form-label">Délai d'expiration maximal (secondes)</label>
             <input type="number" id="input-timeout" class="form-input" value="300" min="60" max="900" />
             <span class="form-help">Temps maximal alloué à l'IA pour réfléchir et appeler les outils Home Assistant (recommandé: 300s).</span>
@@ -405,7 +414,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.8.8</h3>
+            <h3>Françoise v1.8.9</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

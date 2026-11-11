@@ -380,7 +380,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.8.8",
+                    "version": "1.8.9",
                     "active_provider": active_prov.provider_id,
                     "provider_name": active_prov.display_name,
                     "agy_binary": self.agy_client.binary_path,
@@ -418,6 +418,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                     "pre_prompt": self.auth_manager.get_pre_prompt(),
                     "model": self.auth_manager.get_default_model(),
                     "effort": self.auth_manager.get_default_effort(),
+                    "mcp_mode": self.auth_manager.get_mcp_mode(),
                 },
             )
             return
@@ -529,6 +530,10 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 self.auth_manager.set_default_model(str(payload["model"]))
             if "effort" in payload and payload.get("effort"):
                 self.auth_manager.set_default_effort(str(payload["effort"]))
+            if "mcp_mode" in payload and payload.get("mcp_mode"):
+                new_mode = str(payload["mcp_mode"]).strip().lower()
+                self.auth_manager.set_mcp_mode(new_mode)
+                self.mcp_manager.auto_configure_homeassistant_mcp(mode=new_mode)
             self.send_json(
                 HTTPStatus.OK,
                 {
@@ -536,6 +541,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                     "pre_prompt": self.auth_manager.get_pre_prompt(),
                     "model": self.auth_manager.get_default_model(),
                     "effort": self.auth_manager.get_default_effort(),
+                    "mcp_mode": self.auth_manager.get_mcp_mode(),
                 },
             )
             return
@@ -596,7 +602,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             self.conv_store.add_message(conv_id=conv_id, role="user", text=prompt)
 
             model = payload.get("model")
-            effort = payload.get("effort")
+            effort = payload.get("effort") or self.auth_manager.get_default_effort()
             timeout = int(payload.get("timeout", 300))
             stream_mode = payload.get("stream", True)
             pre_prompt = payload.get("pre_prompt")
@@ -751,7 +757,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
 
             conv_id = payload.get("conversation_id")
             model = payload.get("model")
-            effort = payload.get("effort")
+            effort = payload.get("effort") or self.auth_manager.get_default_effort()
             timeout = int(payload.get("timeout", 300))
             pre_prompt = payload.get("system_prompt") or self.auth_manager.get_pre_prompt()
             effective_prompt = prompt
