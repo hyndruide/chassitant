@@ -799,16 +799,66 @@
     if (!isUser && msg.duration) metaParts.push(`${msg.duration.toFixed(1)}s`);
     if (!isUser && msg.tokens) metaParts.push(`${msg.tokens} tokens`);
 
+    let footerHtml = '';
+    if (!isUser) {
+      footerHtml = `
+        <div class="message-footer">
+          <div class="message-meta">${metaParts.join(' • ')}</div>
+          <div class="message-actions">
+            <button class="btn-copy-msg" title="Copier la réponse" aria-label="Copier la réponse">
+              <svg class="copy-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+              <span class="copy-text">Copier</span>
+            </button>
+          </div>
+        </div>
+      `;
+    } else if (metaParts.length > 0) {
+      footerHtml = `<div class="message-meta">${metaParts.join(' • ')}</div>`;
+    }
+
     return `
       <div class="${rowClass}">
         <div class="message-avatar">${avatar}</div>
         <div class="message-bubble">
           ${stepsHtml}
           ${contentHtml}
-          ${metaParts.length > 0 ? `<div class="message-meta">${metaParts.join(' • ')}</div>` : ''}
+          ${!isUser ? `<textarea class="raw-text-source" style="display:none;" aria-hidden="true">${escapeHtml(msg.text || '')}</textarea>` : ''}
+          ${footerHtml}
         </div>
       </div>
     `;
+  }
+
+  async function copyToClipboard(text) {
+    if (!text) return false;
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (e) {}
+    }
+
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.left = '-999999px';
+      textArea.style.top = '-999999px';
+      textArea.setAttribute('readonly', '');
+      textArea.style.opacity = '0';
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      return successful;
+    } catch (err) {
+      console.error('Copy to clipboard failed:', err);
+      return false;
+    }
   }
 
   function setupCodeBlockActions(container) {
@@ -843,14 +893,17 @@
       const copyBtn = header.querySelector('.btn-copy-code');
       copyBtn.addEventListener('click', async () => {
         const textToCopy = code ? code.innerText : pre.innerText;
-        try {
-          await navigator.clipboard.writeText(textToCopy);
+        const ok = await copyToClipboard(textToCopy);
+        if (ok) {
           copyBtn.textContent = '✓ Copié !';
           setTimeout(() => {
             copyBtn.textContent = '📋 Copier';
           }, 2000);
-        } catch (err) {
+        } else {
           copyBtn.textContent = 'Erreur';
+          setTimeout(() => {
+            copyBtn.textContent = '📋 Copier';
+          }, 2000);
         }
       });
     });
@@ -1581,12 +1634,12 @@
 
     // Attach copy listeners
     el.inventoryTableContainer.querySelectorAll('.btn-copy-sm').forEach((btn) => {
-      btn.addEventListener('click', () => {
+      btn.addEventListener('click', async () => {
         const text = btn.dataset.copy;
         if (text) {
-          navigator.clipboard.writeText(text);
+          const ok = await copyToClipboard(text);
           const orig = btn.textContent;
-          btn.textContent = '✓';
+          btn.textContent = ok ? '✓' : '✗';
           setTimeout(() => (btn.textContent = orig), 1500);
         }
       });
@@ -1829,6 +1882,55 @@
           sendMessage();
         }
       });
+    });
+
+    // Assistant response copy button handler (event delegation)
+    el.messagesList.addEventListener('click', async (e) => {
+      const btn = e.target.closest('.btn-copy-msg');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const bubble = btn.closest('.message-bubble');
+      if (!bubble) return;
+
+      let textToCopy = '';
+      const rawHolder = bubble.querySelector('.raw-text-source');
+      if (rawHolder && rawHolder.value) {
+        textToCopy = rawHolder.value;
+      } else {
+        const clone = bubble.cloneNode(true);
+        const unwanted = clone.querySelectorAll(
+          '.reasoning-details, .message-footer, .message-meta, .message-actions, .raw-text-source, script, style'
+        );
+        unwanted.forEach((n) => n.remove());
+        textToCopy = clone.innerText.trim();
+      }
+
+      if (!textToCopy) return;
+
+      const originalHtml = btn.innerHTML;
+      const ok = await copyToClipboard(textToCopy);
+
+      if (ok) {
+        btn.classList.add('copied');
+        btn.innerHTML = `
+          <svg class="copy-icon" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+          <span class="copy-text">Copié !</span>
+        `;
+        setTimeout(() => {
+          btn.classList.remove('copied');
+          btn.innerHTML = originalHtml;
+        }, 2000);
+      } else {
+        const copyText = btn.querySelector('.copy-text');
+        if (copyText) copyText.textContent = 'Erreur';
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+        }, 2000);
+      }
     });
   }
 
