@@ -78,9 +78,13 @@
         </div>
 
         <div class="topbar-right">
-          <div id="topbar-context-badge" class="badge-tag context-gauge desktop-only" style="display: none; cursor: pointer;" title="Capacité restante de la fenêtre de contexte (cliquez pour afficher les métriques complètes)">
-            <span class="context-gauge-icon">📊</span>
-            <span id="topbar-context-text">--% libre</span>
+          <div id="topbar-context-badge" class="badge-tag context-gauge desktop-only" style="display: none; cursor: pointer;" title="Mémoire de la discussion courante (cliquez pour afficher les métriques complètes)">
+            <span class="context-gauge-icon">🧠</span>
+            <span id="topbar-context-text">Mémoire : --%</span>
+          </div>
+          <div id="topbar-quota-badge" class="badge-tag quota-badge desktop-only" style="display: none; cursor: pointer;" title="Forfait & Quota du compte IA actif (cliquez pour détails)">
+            <span id="topbar-quota-icon">🔋</span>
+            <span id="topbar-quota-text">Quota...</span>
           </div>
           <button id="btn-effort-toggle" class="badge-tag" style="cursor: pointer;" title="Niveau de réflexion de l'IA (cliquer pour changer : Rapide / Équilibré / Approfondi)">
             <span id="effort-toggle-text">⚡ Rapide</span>
@@ -339,6 +343,19 @@
             <span id="provider-desc-help" class="form-help">Sélectionnez le moteur IA qui exécutera vos requêtes et automatisations.</span>
           </div>
 
+          <!-- Provider Account Quota Card -->
+          <div class="auth-card" id="provider-quota-card" style="margin-bottom: 14px;">
+            <div class="auth-header">
+              <strong style="display:flex; align-items:center; gap:6px;">
+                <span id="provider-quota-icon">🔋</span> Statut du Forfait & Quota du Compte
+              </strong>
+              <span id="provider-quota-badge" class="auth-status-tag ok">Chargement...</span>
+            </div>
+            <div id="provider-quota-content" style="font-size: 12.5px; line-height: 1.6; color: var(--text-secondary); margin-top: 6px;">
+              Chargement des quotas...
+            </div>
+          </div>
+
           <!-- Provider Specific Config Boxes -->
           <div id="provider-config-codex" class="provider-config-box" style="display: none;">
             <div style="font-size: 12px; line-height: 1.5; color: var(--text-secondary);">
@@ -418,7 +435,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.8.10</h3>
+            <h3>Françoise v1.8.11</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

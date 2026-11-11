@@ -46,6 +46,48 @@ class AgyProvider(BaseProvider):
             ]
         return models
 
+    def get_quota_status(self) -> Dict[str, Any]:
+        """Fetch quota and account tier status for Google Antigravity / Gemini."""
+        import json
+        from pathlib import Path
+
+        oauth_file = Path.home() / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
+        account_email = None
+        auth_method = "consumer"
+
+        if oauth_file.is_file():
+            try:
+                with open(oauth_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    account_email = data.get("id_token_email")
+                    auth_method = data.get("auth_method") or "consumer"
+            except Exception:
+                pass
+
+        is_auth, _ = self.check_auth(timeout=5)
+        if not is_auth:
+            return {
+                "provider": "agy",
+                "display_name": self.display_name,
+                "plan": "Non connecté",
+                "is_authenticated": False,
+                "summary": "Non connecté à Google (ouvrir Connexion)",
+            }
+
+        plan_desc = "Google One AI Premium / Gemini Advanced" if auth_method == "consumer" else f"Google Cloud ({auth_method})"
+        summary = f"{account_email} • Quota Gemini inclus (0 € / token)" if account_email else "Compte Google connecté • Forfait Gemini inclus"
+
+        return {
+            "provider": "agy",
+            "display_name": self.display_name,
+            "plan": plan_desc,
+            "account": account_email,
+            "is_authenticated": True,
+            "quota_type": "subscription_included",
+            "summary": summary,
+            "note": "Google applique un quota d'utilisation équitable (fair-use) sans facturation au token.",
+        }
+
     def process_stream(
         self,
         prompt: str,

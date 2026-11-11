@@ -188,6 +188,18 @@ class TestBridgeServer(unittest.TestCase):
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data.get("active_provider"), "agy")
 
+    def test_providers_quota_endpoint(self) -> None:
+        """Verify /api/providers/quota returns quota information."""
+        url = f"http://127.0.0.1:{self.port}/api/providers/quota"
+        req = request.Request(url, headers={"Authorization": f"Bearer {self.token}"})
+        with request.urlopen(req) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data.get("success"))
+            self.assertIn("active_provider", data)
+            self.assertIn("quota", data)
+            self.assertIn("all_quotas", data)
+
     def test_process_empty_prompt(self) -> None:
         """Verify 400 Bad Request when prompt is empty."""
         url = f"http://127.0.0.1:{self.port}/api/process"

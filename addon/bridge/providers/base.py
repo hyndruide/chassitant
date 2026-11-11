@@ -42,6 +42,15 @@ class BaseProvider(ABC):
         """Return available models [{'id': '...', 'name': '...'}]."""
         ...
 
+    def get_quota_status(self) -> Dict[str, Any]:
+        """Return account quota, tier and rate limit information."""
+        return {
+            "provider": self.provider_id,
+            "display_name": self.display_name,
+            "plan": "Forfait standard",
+            "summary": "Actif",
+        }
+
     @abstractmethod
     def process_stream(
         self,

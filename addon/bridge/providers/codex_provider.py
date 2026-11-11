@@ -121,6 +121,74 @@ class CodexProvider(BaseProvider):
             {"id": "o1", "name": "o1 (Raisonnement avancé)"},
         ]
 
+    def get_quota_status(self) -> Dict[str, Any]:
+        """Fetch quota and rate limit status for OpenAI Codex / ChatGPT subscription."""
+        is_auth, auth_msg = self.check_auth(timeout=5)
+        if not is_auth:
+            return {
+                "provider": "codex",
+                "display_name": self.display_name,
+                "plan": "Non connecté",
+                "is_authenticated": False,
+                "summary": "Non connecté (ouvrir le terminal pour se connecter)",
+            }
+
+        codex_home = Path("/data/.codex") if os.path.isdir("/data/.codex") else Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+        candidate_dirs = [codex_home, Path("/data/.codex"), Path.home() / ".codex", Path("/root/.codex")]
+
+        quota_5h = None
+        quota_week = None
+        reset_5h = None
+        reset_week = None
+
+        # Inspect recent session files for rate limits telemetry
+        for cdir in candidate_dirs:
+            sessions_dir = cdir / "sessions"
+            if sessions_dir.is_dir():
+                try:
+                    session_files = sorted(sessions_dir.glob("**/*.jsonl"), key=os.path.getmtime, reverse=True)
+                    if session_files:
+                        with open(session_files[0], "r", encoding="utf-8", errors="ignore") as f:
+                            for line in reversed(f.readlines()[-40:]):
+                                try:
+                                    data = json.loads(line)
+                                    rl = data.get("rate_limits") or data.get("rate_limit") or data.get("quota")
+                                    if rl and isinstance(rl, dict):
+                                        quota_5h = rl.get("window_5h_percent_remaining") or rl.get("rolling_5h")
+                                        quota_week = rl.get("window_week_percent_remaining") or rl.get("weekly")
+                                        reset_5h = rl.get("window_5h_reset")
+                                        reset_week = rl.get("window_week_reset")
+                                        if quota_5h is not None:
+                                            break
+                                except Exception:
+                                    pass
+                except Exception as ex:
+                    logger.debug("Failed scanning codex sessions: %s", ex)
+                if quota_5h is not None:
+                    break
+
+        summary_parts = []
+        if quota_5h is not None:
+            summary_parts.append(f"5h : {quota_5h}% libre")
+        if quota_week is not None:
+            summary_parts.append(f"Semaine : {quota_week}% libre")
+
+        summary = " • ".join(summary_parts) if summary_parts else "Compte ChatGPT actif (Quota glissant 5h & Semaine)"
+
+        return {
+            "provider": "codex",
+            "display_name": self.display_name,
+            "plan": "Compte ChatGPT (Plus / Pro / Team)",
+            "is_authenticated": True,
+            "quota_5h_percent": quota_5h,
+            "quota_week_percent": quota_week,
+            "reset_5h": reset_5h,
+            "reset_week": reset_week,
+            "summary": summary,
+            "quota_url": "https://chatgpt.com/codex/settings/usage",
+            "note": "OpenAI applique 2 quotas temporels distincts : sur 5 heures glissantes et sur la semaine.",
+        }
+
     def _detect_exec_flags(self) -> List[str]:
         """Detect supported non-interactive/sandbox flags from codex exec --help."""
         flags: List[str] = []

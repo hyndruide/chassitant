@@ -102,6 +102,66 @@ class OpenAICompatibleProvider(BaseProvider):
             {"id": "default", "name": f"{self.display_name} (Modèle par défaut)"}
         ])
 
+    def get_quota_status(self) -> Dict[str, Any]:
+        """Fetch quota and credit balance for OpenAI-compatible providers."""
+        pid = self._provider_id
+        if pid == "openrouter":
+            if self.api_key:
+                try:
+                    req = urllib.request.Request(
+                        "https://openrouter.ai/api/v1/auth/key",
+                        headers={"Authorization": f"Bearer {self.api_key}"},
+                    )
+                    with urllib.request.urlopen(req, timeout=4) as resp:
+                        data = json.loads(resp.read().decode("utf-8")).get("data", {})
+                        limit = data.get("limit")
+                        usage = data.get("usage", 0)
+                        balance = (limit - usage) if limit is not None else None
+                        return {
+                            "provider": pid,
+                            "display_name": self.display_name,
+                            "plan": "OpenRouter API (Multi-modèles Claude, OpenAI, etc.)",
+                            "is_authenticated": True,
+                            "credits_remaining": round(balance, 2) if balance is not None else "Illimité",
+                            "usage": round(usage, 2),
+                            "summary": f"Crédits OpenRouter : ${round(balance, 2) if balance is not None else 'N/A'} restants",
+                            "note": "Donne accès à Claude 3.5 Sonnet, GPT-4o, DeepSeek R1 selon votre solde.",
+                        }
+                except Exception:
+                    pass
+            return {
+                "provider": pid,
+                "display_name": self.display_name,
+                "plan": "OpenRouter API",
+                "is_authenticated": bool(self.api_key),
+                "summary": "Clé API OpenRouter configurée" if self.api_key else "Non configuré",
+            }
+        elif pid == "groq":
+            return {
+                "provider": pid,
+                "display_name": self.display_name,
+                "plan": "Groq Cloud (Llama 3.3 70B ultra-rapide)",
+                "is_authenticated": bool(self.api_key),
+                "summary": "30 req/min • 6 000 tokens/min • Gratuit",
+                "note": "Plafond gratuit de 14 400 requêtes / jour réinitialisé quotidiennement.",
+            }
+        elif pid == "ollama":
+            return {
+                "provider": pid,
+                "display_name": self.display_name,
+                "plan": "Ollama Local",
+                "is_authenticated": True,
+                "summary": "Local sur votre machine • 100% Gratuit & Illimité",
+                "note": "Aucun quota ni plafond : tourne localement sans dépendance externe.",
+            }
+        return {
+            "provider": pid,
+            "display_name": self.display_name,
+            "plan": "API standard",
+            "is_authenticated": bool(self.api_key),
+            "summary": "Prêt",
+        }
+
     def process_stream(
         self,
         prompt: str,

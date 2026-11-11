@@ -108,6 +108,13 @@
     topbarModelText: document.getElementById('topbar-model-text'),
     topbarContextBadge: document.getElementById('topbar-context-badge'),
     topbarContextText: document.getElementById('topbar-context-text'),
+    topbarQuotaBadge: document.getElementById('topbar-quota-badge'),
+    topbarQuotaIcon: document.getElementById('topbar-quota-icon'),
+    topbarQuotaText: document.getElementById('topbar-quota-text'),
+    providerQuotaCard: document.getElementById('provider-quota-card'),
+    providerQuotaIcon: document.getElementById('provider-quota-icon'),
+    providerQuotaBadge: document.getElementById('provider-quota-badge'),
+    providerQuotaContent: document.getElementById('provider-quota-content'),
     btnTopbarMcp: document.getElementById('btn-topbar-mcp'),
     topbarMcpDot: document.getElementById('topbar-mcp-dot'),
     topbarMcpText: document.getElementById('topbar-mcp-text'),
@@ -839,8 +846,8 @@
     const limitTokens = formatTokens(latestUsage.context_limit);
 
     el.topbarContextBadge.style.display = 'inline-flex';
-    el.topbarContextText.textContent = `${remPct}% libre`;
-    el.topbarContextBadge.title = `Contexte de la discussion : ${remPct}% libre (${remTokens} tokens restants sur ${limitTokens} max)\nModèle : ${latestUsage.model || 'Actif'} (cliquez pour détails)`;
+    el.topbarContextText.textContent = `Mémoire : ${remPct}% libre`;
+    el.topbarContextBadge.title = `Mémoire vive (Contexte discussion) : ${remPct}% libre (${remTokens} tokens restants sur ${limitTokens} max)\nModèle : ${latestUsage.model || 'Actif'} (cliquez pour détails)`;
 
     el.topbarContextBadge.classList.remove('good', 'warning', 'danger');
     if (remPct > 50) {
@@ -859,6 +866,106 @@
         el.btnCompactConv.classList.remove('alert-compact');
         el.btnCompactConv.title = 'Compacter le contexte de cette conversation pour accélérer les réponses';
       }
+    }
+  }
+
+  async function loadProviderQuotas() {
+    try {
+      const data = await apiCall('/api/providers/quota');
+      if (!data || !data.success) return;
+
+      state.activeQuota = data.quota || {};
+      state.allQuotas = data.all_quotas || {};
+      updateQuotaUi();
+    } catch (e) {
+      console.debug('Failed to load provider quotas:', e);
+    }
+  }
+
+  function updateQuotaUi() {
+    const q = state.activeQuota;
+    if (!q || !el.topbarQuotaBadge) return;
+
+    const pid = q.provider || state.activeProviderId || 'agy';
+    let icon = '🔋';
+    let label = 'Forfait';
+
+    if (pid === 'codex') {
+      icon = '🟢';
+      if (q.quota_5h_percent !== null && q.quota_5h_percent !== undefined) {
+        label = `ChatGPT: 5h ${q.quota_5h_percent}% • Semaine ${q.quota_week_percent || 100}%`;
+      } else {
+        label = 'ChatGPT Plus/Pro';
+      }
+    } else if (pid === 'agy') {
+      icon = '🟣';
+      label = 'Gemini: Inclus';
+    } else if (pid === 'groq') {
+      icon = '⚡';
+      label = 'Groq: Gratuit';
+    } else if (pid === 'openrouter') {
+      icon = '🌐';
+      label = q.credits_remaining !== undefined ? `Crédits: $${q.credits_remaining}` : 'OpenRouter';
+    } else if (pid === 'ollama') {
+      icon = '🦙';
+      label = 'Ollama: Local';
+    }
+
+    if (el.topbarQuotaIcon) el.topbarQuotaIcon.textContent = icon;
+    if (el.topbarQuotaText) el.topbarQuotaText.textContent = label;
+    el.topbarQuotaBadge.style.display = 'inline-flex';
+    el.topbarQuotaBadge.title = `Forfait & Quota compte IA (${q.display_name || pid}) :\n${q.summary || 'Actif'}\n(Cliquez pour détails)`;
+
+    // Update settings modal card if present
+    if (el.providerQuotaCard && el.providerQuotaContent) {
+      if (el.providerQuotaIcon) el.providerQuotaIcon.textContent = icon;
+      if (el.providerQuotaBadge) {
+        el.providerQuotaBadge.textContent = q.is_authenticated ? 'Connecté' : 'Vérifié';
+        el.providerQuotaBadge.className = q.is_authenticated ? 'auth-status-tag ok' : 'auth-status-tag warning';
+      }
+
+      let extraHtml = '';
+      if (pid === 'codex') {
+        const h5 = q.quota_5h_percent !== null && q.quota_5h_percent !== undefined ? `${q.quota_5h_percent}% libre` : 'Actif';
+        const sem = q.quota_week_percent !== null && q.quota_week_percent !== undefined ? `${q.quota_week_percent}% libre` : 'Actif';
+        extraHtml = `
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0;">
+            <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
+              <span style="font-size: 11px; color: var(--text-muted); display: block;">⏳ Quota 5 heures (Burst)</span>
+              <strong style="color: #34d399; font-size: 14px;">${escapeHtml(h5)}</strong>
+            </div>
+            <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
+              <span style="font-size: 11px; color: var(--text-muted); display: block;">📅 Quota Semaine</span>
+              <strong style="color: #34d399; font-size: 14px;">${escapeHtml(sem)}</strong>
+            </div>
+          </div>
+          <div style="font-size: 11.5px; margin-top: 4px;">
+            🔗 Suivre en direct sur votre compte : <a href="${q.quota_url || 'https://chatgpt.com/codex/settings/usage'}" target="_blank" style="color: #60a5fa; text-decoration: underline;">chatgpt.com/codex/settings/usage</a>
+          </div>
+        `;
+      } else if (pid === 'agy') {
+        extraHtml = `
+          <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px; margin: 8px 0;">
+            <span style="font-size: 11px; color: var(--text-muted); display: block;">Compte Google actif</span>
+            <strong style="color: #a78bfa; font-size: 13px;">${escapeHtml(q.account || 'Connecté')}</strong>
+            <p style="margin: 4px 0 0 0; font-size: 11px; color: var(--text-secondary);">Accès illimité aux modèles Gemini 2.5 Flash, Gemini 2.5 Pro et Claude selon votre quota Google.</p>
+          </div>
+        `;
+      } else if (pid === 'openrouter') {
+        extraHtml = `
+          <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px; margin: 8px 0;">
+            <span style="font-size: 11px; color: var(--text-muted); display: block;">Solde de crédits OpenRouter</span>
+            <strong style="color: #60a5fa; font-size: 14px;">$${escapeHtml(String(q.credits_remaining || '0'))}</strong>
+          </div>
+        `;
+      }
+
+      el.providerQuotaContent.innerHTML = `
+        <div><strong>Plan :</strong> ${escapeHtml(q.plan || 'Standard')}</div>
+        <div style="margin-top: 2px;">${escapeHtml(q.summary || '')}</div>
+        ${extraHtml}
+        ${q.note ? `<div style="margin-top: 6px; font-size: 11px; color: var(--text-muted); font-style: italic;">ℹ️ ${escapeHtml(q.note)}</div>` : ''}
+      `;
     }
   }
 
@@ -1814,6 +1921,7 @@
 
     refreshAuthStatus();
     loadMcpServers();
+    loadProviderQuotas();
 
     el.settingsModal.classList.add('active');
   }
@@ -2240,7 +2348,7 @@
           const srcStr = latest.source === 'exact' ? 'Exacte (fournie par le LLM)' : 'Estimée';
 
           alert(
-            `📊 Contexte & Consommation LLM (Dernier échange) :\n\n` +
+            `🧠 Mémoire Vive de la Discussion (Contexte LLM) :\n\n` +
             `• Modèle : ${latest.model || state.settings.model || 'Actif'}\n` +
             `• 📥 Entrée (Prompt & Historique) : ${inStr} tokens\n` +
             `• 📤 Sortie (Réponse) : ${outStr} tokens` +
@@ -2248,9 +2356,17 @@
             `• ⚡ Total échange : ${totalStr} tokens\n\n` +
             `• 📊 Capacité restante : ${remPct} libre (${remStr} / ${limitStr} tokens max)\n` +
             `• 🏷️ Précision : ${srcStr}\n\n` +
-            `💡 Astuce : Si le contexte se remplit (< 20% libre), cliquez sur le balai 🧹 pour compacter la mémoire de la discussion.`
+            `💡 Note : Cet indicateur mesure l'état de remplissage de la mémoire de cette conversation.\n` +
+            `Pour voir vos quotas de compte (ChatGPT 5h & semaine, Google, etc.), cliquez sur le badge Forfait 🔋 à côté.`
           );
         }
+      });
+    }
+
+    // Topbar Quota Badge click opens Settings on providers & quotas tab
+    if (el.topbarQuotaBadge) {
+      el.topbarQuotaBadge.addEventListener('click', () => {
+        openSettings('tab-model');
       });
     }
 
@@ -2423,6 +2539,7 @@
     initEventListeners();
     updateModelBadges();
     loadProviders();
+    loadProviderQuotas();
 
     try {
       const serverSettings = await apiCall('/api/settings');

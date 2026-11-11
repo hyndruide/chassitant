@@ -380,7 +380,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.8.10",
+                    "version": "1.8.11",
                     "active_provider": active_prov.provider_id,
                     "provider_name": active_prov.display_name,
                     "agy_binary": self.agy_client.binary_path,
@@ -403,6 +403,22 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                     "success": True,
                     "active_provider": self.provider_factory.get_active_provider_id(),
                     "providers": self.provider_factory.list_providers(),
+                },
+            )
+            return
+
+        # Providers Quotas endpoint
+        if path == "/api/providers/quota":
+            if not self.check_authorization():
+                return
+            active_prov = self.provider_factory.get_active_provider()
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "active_provider": self.provider_factory.get_active_provider_id(),
+                    "quota": active_prov.get_quota_status() if active_prov else {},
+                    "all_quotas": self.provider_factory.get_all_quotas(),
                 },
             )
             return

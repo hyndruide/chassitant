@@ -122,6 +122,7 @@ class ProviderFactory:
                 "is_active": (pid == active_id),
                 "is_configured": prov.is_configured(),
                 "models": prov.list_models(),
+                "quota": prov.get_quota_status(),
                 "config": {
                     "api_key_set": bool(getattr(prov, "api_key", False)),
                     "base_url": getattr(prov, "base_url", ""),
@@ -129,3 +130,7 @@ class ProviderFactory:
                 },
             })
         return result
+
+    def get_all_quotas(self) -> Dict[str, Any]:
+        """Return quota and allowance status for all providers."""
+        return {pid: prov.get_quota_status() for pid, prov in self._providers.items()}
