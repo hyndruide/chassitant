@@ -1,11 +1,22 @@
-# 🍸 Françoise — Assistante IA Antigravity (`agy`) 100% autonome pour Home Assistant
+# 🍸 Françoise — Chatbot IA & Agent Domotique 100 % autonome pour Home Assistant
 
-[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
+[![Open your Home Assistant and show the add-on store with a specific repository focused.](https://my.home-assistant.io/badges/supervisor_add_addon_repository.svg)](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fhyndruide%2Ffrancoise)
 [![GitHub Release](https://img.shields.io/github/v/release/hyndruide/francoise)](https://github.com/hyndruide/francoise/releases)
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/default)
 
-**Françoise** permet d'exécuter **Google Antigravity CLI (`agy`)** directement et en toute autonomie sur votre machine **Home Assistant** (sous Docker), 24h/24 et 7j/7, sans nécessiter aucun PC allumé.
+**Françoise** est un module complémentaire tout-en-un pour **Home Assistant** qui embarque des agents IA autonomes de dernière génération (**Google Antigravity `agy`**, **OpenAI Codex CLI `codex`**, **Groq**, **OpenRouter**, **Ollama**) tournant 24h/24 et 7j/7 directement sur votre box, sans nécessiter de PC allumé.
 
-Elle s'intègre nativement avec son interface Web (Drawer rétractable, historique des conversations, inventaire des entités `HA_CONTEXT.md`) et comme moteur de conversation intelligent (**Assist**) pour piloter votre maison, répondre à des requêtes complexes et agir directement sur vos entités via le protocole MCP... avec son tempérament légendaire de 40 ans de comptoir au "Rouge et le Noir" !
+Grâce à son serveur **MCP natif (`ha-mcp`)** et à la connexion **Device Auth**, vous pouvez utiliser vos abonnements personnels (compte Google ou forfait ChatGPT Plus/Team/Pro) à **0 € de surcoût d'API par token** pour piloter votre maison, rechercher des entités et générer/modifier en direct vos cartes et dashboards Lovelace !
+
+---
+
+### 🌟 En un coup d'œil : Multi-Moteurs IA Disponibles
+
+- 🔵 **Google Antigravity (`agy`)** : Authentification Google OAuth, modèles Gemini (Flash, Pro, Claude).
+- 🟢 **OpenAI Codex CLI (`codex`)** : Connecté à votre compte personnel ChatGPT (Device Auth sans clé d'API, 0 € par token) ou clé OpenAI.
+- ⚡ **Groq** : Modèles gratuits ultra-rapides (Llama 3.3 70B, ~500 tok/s).
+- 🌐 **OpenRouter** : Modèles gratuits (DeepSeek R1, Llama :free) ou premium.
+- 🦙 **Ollama** : Modèles 100 % locaux et privés sur votre réseau (Llama 3.2, Qwen 2.5).
 
 ---
 
