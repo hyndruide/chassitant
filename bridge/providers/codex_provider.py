@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple
@@ -28,6 +30,7 @@ class CodexProvider(BaseProvider):
             else:
                 app_dir = str(Path(__file__).resolve().parent.parent.parent)
         self.work_dir = app_dir
+        self._cached_flags: Optional[List[str]] = None
         logger.info("Initialized CodexProvider with binary: %s (work_dir=%s)", self.binary_path, self.work_dir)
 
     @classmethod
@@ -96,6 +99,49 @@ class CodexProvider(BaseProvider):
             {"id": "o1", "name": "o1 (Raisonnement avancé)"},
         ]
 
+    def _detect_exec_flags(self) -> List[str]:
+        """Detect supported non-interactive/sandbox flags from codex exec --help."""
+        flags: List[str] = []
+        if not self.binary_path:
+            return flags
+
+        try:
+            res = subprocess.run(
+                [self.binary_path, "exec", "--help"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                check=False,
+            )
+            help_text = (res.stdout or "") + " " + (res.stderr or "")
+            if "--dangerously-bypass-approvals-and-sandbox" in help_text:
+                flags.append("--dangerously-bypass-approvals-and-sandbox")
+            elif "--yolo" in help_text:
+                flags.append("--yolo")
+        except Exception as ex:
+            logger.debug("Failed to query codex exec --help: %s", ex)
+            flags.append("--dangerously-bypass-approvals-and-sandbox")
+        return flags
+
+    def get_exec_flags(self) -> List[str]:
+        if self._cached_flags is None:
+            self._cached_flags = self._detect_exec_flags()
+        return list(self._cached_flags)
+
+    def build_command(self, prompt: str, model: Optional[str] = None) -> List[str]:
+        """Build the codex exec command list following the [OPTIONS] [PROMPT] syntax."""
+        if not self.binary_path:
+            raise RuntimeError("Binary path is not set")
+        cmd = [self.binary_path, "exec"]
+        cmd.extend(self.get_exec_flags())
+
+        if model and model != "default":
+            cmd.extend(["--model", model])
+
+        # The prompt MUST always be the last positional argument
+        cmd.append(prompt)
+        return cmd
+
     def process_stream(
         self,
         prompt: str,
@@ -121,18 +167,15 @@ class CodexProvider(BaseProvider):
         if pre_prompt and pre_prompt.strip():
             effective_prompt = f"[Consignes système : {pre_prompt.strip()}]\n\n{prompt}"
 
-        cmd = [self.binary_path, "exec", effective_prompt, "--full-auto"]
-        if model and model != "default":
-            cmd.extend(["--model", model])
-
-        logger.info("Launching Codex CLI command: %s", " ".join(cmd[:3]))
+        cmd = self.build_command(effective_prompt, model=model)
+        logger.info("Launching Codex CLI command: %s (args=%d)", cmd[0], len(cmd))
         start_time = time.time()
 
         try:
             proc = subprocess.Popen(
                 cmd,
                 stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.PIPE,
                 text=True,
                 bufsize=1,
                 cwd=self.work_dir,
@@ -142,26 +185,84 @@ class CodexProvider(BaseProvider):
             if on_proc_started:
                 on_proc_started(proc)
 
+            event_queue: queue.Queue[Tuple[str, Optional[str]]] = queue.Queue()
+
+            def drain_stdout() -> None:
+                try:
+                    if proc.stdout:
+                        for line in iter(proc.stdout.readline, ""):
+                            event_queue.put(("stdout", line))
+                except Exception:
+                    pass
+                finally:
+                    event_queue.put(("stdout_done", None))
+
+            def drain_stderr() -> None:
+                try:
+                    if proc.stderr:
+                        for line in iter(proc.stderr.readline, ""):
+                            event_queue.put(("stderr", line))
+                except Exception:
+                    pass
+                finally:
+                    event_queue.put(("stderr_done", None))
+
+            t_out = threading.Thread(target=drain_stdout, daemon=True)
+            t_err = threading.Thread(target=drain_stderr, daemon=True)
+            t_out.start()
+            t_err.start()
+
             accumulated_text = ""
-            for line in iter(proc.stdout.readline, ""):
+            stderr_lines: List[str] = []
+            stdout_done = False
+
+            while True:
                 if cancel_event and getattr(cancel_event, "is_set", lambda: False)():
                     proc.terminate()
                     yield {"type": "cancelled", "message": "Génération interrompue par l'utilisateur"}
                     return
 
-                accumulated_text += line
-                yield {"type": "text_delta", "delta": line}
+                try:
+                    stream_type, data = event_queue.get(timeout=0.1)
+                except queue.Empty:
+                    if stdout_done and proc.poll() is not None:
+                        break
+                    continue
 
-            proc.stdout.close()
+                if stream_type == "stdout" and data:
+                    accumulated_text += data
+                    yield {"type": "text_delta", "delta": data}
+                elif stream_type == "stderr" and data:
+                    line_s = data.strip()
+                    if line_s:
+                        stderr_lines.append(line_s)
+                        yield {"type": "status", "message": f"Codex : {line_s[:100]}"}
+                elif stream_type == "stdout_done":
+                    stdout_done = True
+                    if proc.poll() is not None and event_queue.empty():
+                        break
+
+            t_out.join(timeout=2)
+            t_err.join(timeout=2)
             ret_code = proc.wait(timeout=max(timeout - int(time.time() - start_time), 5))
 
             if ret_code != 0:
-                logger.warning("Codex CLI exited with non-zero code %d", ret_code)
+                err_details = "\n".join(stderr_lines).strip() or accumulated_text.strip() or f"Code sortie {ret_code}"
+                logger.warning("Codex CLI exited with code %d: %s", ret_code, err_details)
+                yield {
+                    "type": "error",
+                    "error": f"Erreur Codex CLI ({ret_code}) :\n{err_details}",
+                }
+                return
+
+            final_text = accumulated_text.strip()
+            if not final_text and stderr_lines:
+                final_text = "\n".join(stderr_lines).strip()
 
             duration = time.time() - start_time
             yield {
                 "type": "done",
-                "response": accumulated_text.strip(),
+                "response": final_text,
                 "duration_seconds": duration,
             }
 

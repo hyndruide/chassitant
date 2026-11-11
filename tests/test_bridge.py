@@ -204,6 +204,23 @@ class TestBridgeServer(unittest.TestCase):
             request.urlopen(req)
         self.assertEqual(ctx.exception.code, HTTPStatus.BAD_REQUEST)
 
+    def test_codex_provider_command_structure(self) -> None:
+        """Verify CodexProvider builds valid command lines matching 'codex exec [OPTIONS] [PROMPT]'."""
+        from bridge.providers.codex_provider import CodexProvider
+        provider = CodexProvider(binary_path="/usr/local/bin/codex")
+        provider._cached_flags = ["--dangerously-bypass-approvals-and-sandbox"]
+
+        cmd = provider.build_command("Hello assistant", model="gpt-4o")
+        self.assertEqual(cmd[0], "/usr/local/bin/codex")
+        self.assertEqual(cmd[1], "exec")
+        self.assertNotIn("--full-auto", cmd)
+        self.assertIn("--dangerously-bypass-approvals-and-sandbox", cmd)
+        self.assertIn("--model", cmd)
+        model_idx = cmd.index("--model")
+        self.assertEqual(cmd[model_idx + 1], "gpt-4o")
+        # Prompt must be the very last element
+        self.assertEqual(cmd[-1], "Hello assistant")
+
 
 if __name__ == "__main__":
     unittest.main()
