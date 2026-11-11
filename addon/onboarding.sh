@@ -20,8 +20,8 @@ echo ""
 echo "----------------------------------------------------------------"
 echo "Session terminée. Vous êtes dans le terminal interactif."
 echo "Commandes disponibles :"
-echo "  - 'agy'   : pour reconnecter votre compte Google (Antigravity)"
-echo "  - 'codex' : pour connecter votre compte ChatGPT Plus/Pro (OpenAI)"
+echo "  - 'agy'                       : connecter votre compte Google (Antigravity)"
+echo "  - 'codex login --device-auth' : connecter votre compte ChatGPT (OpenAI)"
 echo "----------------------------------------------------------------"
 
 exec /bin/bash

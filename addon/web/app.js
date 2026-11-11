@@ -129,6 +129,7 @@
     providerConfigGroq: document.getElementById('provider-config-groq'),
     providerConfigOpenRouter: document.getElementById('provider-config-openrouter'),
     providerConfigOllama: document.getElementById('provider-config-ollama'),
+    inputCodexKey: document.getElementById('input-codex-key'),
     inputGroqKey: document.getElementById('input-groq-key'),
     inputOpenRouterKey: document.getElementById('input-openrouter-key'),
     inputOllamaUrl: document.getElementById('input-ollama-url'),
@@ -1446,7 +1447,9 @@
           });
 
           const configPayload = {};
-          if (chosenProvider === 'groq' && el.inputGroqKey && el.inputGroqKey.value) {
+          if (chosenProvider === 'codex' && el.inputCodexKey && el.inputCodexKey.value) {
+            configPayload.api_key = el.inputCodexKey.value.trim();
+          } else if (chosenProvider === 'groq' && el.inputGroqKey && el.inputGroqKey.value) {
             configPayload.api_key = el.inputGroqKey.value.trim();
           } else if (chosenProvider === 'openrouter' && el.inputOpenRouterKey && el.inputOpenRouterKey.value) {
             configPayload.api_key = el.inputOpenRouterKey.value.trim();
@@ -1601,6 +1604,10 @@
           renderProviderModels(state.activeProviderId, state.settings.model);
         }
 
+        const codexProv = res.providers.find((p) => p.id === 'codex');
+        if (codexProv && codexProv.config?.api_key_set && el.inputCodexKey && !el.inputCodexKey.value) {
+          el.inputCodexKey.placeholder = '•••••••••••••••••••• (Clé enregistrée)';
+        }
         const groqProv = res.providers.find((p) => p.id === 'groq');
         if (groqProv && groqProv.config?.api_key_set && el.inputGroqKey && !el.inputGroqKey.value) {
           el.inputGroqKey.placeholder = '•••••••••••••••••••• (Clé enregistrée)';

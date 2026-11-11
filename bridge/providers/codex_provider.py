@@ -21,7 +21,7 @@ logger = logging.getLogger("chassitant.providers.codex")
 class CodexProvider(BaseProvider):
     """Provider integrating OpenAI's official Codex CLI connected to ChatGPT."""
 
-    def __init__(self, binary_path: Optional[str] = None) -> None:
+    def __init__(self, binary_path: Optional[str] = None, api_key: Optional[str] = None) -> None:
         self.binary_path = binary_path or self.find_binary()
         app_dir = os.environ.get("CHASSITANT_APP_DIR")
         if not app_dir or not os.path.isdir(app_dir):
@@ -30,6 +30,7 @@ class CodexProvider(BaseProvider):
             else:
                 app_dir = str(Path(__file__).resolve().parent.parent.parent)
         self.work_dir = app_dir
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY", "")
         self._cached_flags: Optional[List[str]] = None
         logger.info("Initialized CodexProvider with binary: %s (work_dir=%s)", self.binary_path, self.work_dir)
 
@@ -71,25 +72,38 @@ class CodexProvider(BaseProvider):
         if not self.is_configured():
             return False, "Le binaire 'codex' n'est pas encore installé sur le système."
 
-        # Check for auth file or test via CLI
-        codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
-        auth_file = codex_home / "auth.json"
-        if auth_file.is_file():
-            return True, "Session ChatGPT active !"
+        # 1. API Key check
+        if self.api_key or os.getenv("OPENAI_API_KEY"):
+            return True, "Clé API OpenAI configurée !"
 
+        # 2. Check login status via `codex login status`
         try:
             res = subprocess.run(
-                [self.binary_path, "--version"],
+                [self.binary_path, "login", "status"],
                 capture_output=True,
                 text=True,
                 timeout=timeout,
                 check=False,
             )
-            if res.returncode == 0:
-                return True, f"Codex CLI opérationnel ({res.stdout.strip()}). Connectez votre compte via le Terminal."
-            return False, res.stderr.strip() or "Erreur de vérification Codex."
+            out = (res.stdout or "").strip()
+            err = (res.stderr or "").strip()
+            combined = f"{out} {err}".strip()
+
+            if res.returncode == 0 and ("Logged in" in combined or "logged in" in combined):
+                return True, out or "Session active (ChatGPT)"
         except Exception as ex:
-            return False, str(ex)
+            logger.debug("codex login status failed: %s", ex)
+
+        # 3. Check auth.json in ~/.codex or /data/.codex
+        codex_home = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
+        if (codex_home / "auth.json").is_file():
+            return True, "Session ChatGPT active !"
+
+        return False, (
+            "Codex CLI n'est pas encore authentifié. "
+            "Ouvrez le Terminal Ingress et lancez 'codex login --device-auth' pour lier votre compte ChatGPT, "
+            "ou renseignez une clé API OpenAI dans les Paramètres."
+        )
 
     def list_models(self) -> List[Dict[str, str]]:
         return [
@@ -171,6 +185,12 @@ class CodexProvider(BaseProvider):
         logger.info("Launching Codex CLI command: %s (args=%d)", cmd[0], len(cmd))
         start_time = time.time()
 
+        env = os.environ.copy()
+        if self.api_key:
+            env["OPENAI_API_KEY"] = self.api_key
+        if "CODEX_HOME" not in env:
+            env["CODEX_HOME"] = str(Path.home() / ".codex")
+
         try:
             proc = subprocess.Popen(
                 cmd,
@@ -179,7 +199,7 @@ class CodexProvider(BaseProvider):
                 text=True,
                 bufsize=1,
                 cwd=self.work_dir,
-                env=os.environ.copy(),
+                env=env,
             )
 
             if on_proc_started:
@@ -249,6 +269,26 @@ class CodexProvider(BaseProvider):
             if ret_code != 0:
                 err_details = "\n".join(stderr_lines).strip() or accumulated_text.strip() or f"Code sortie {ret_code}"
                 logger.warning("Codex CLI exited with code %d: %s", ret_code, err_details)
+
+                # Check for 401 Unauthorized / missing authentication
+                if "401" in err_details or "Unauthorized" in err_details or "Missing bearer" in err_details:
+                    friendly_err = (
+                        "⚠️ **Compte ChatGPT non connecté dans Codex CLI**\n\n"
+                        "L'API OpenAI a renvoyé l'erreur `401 Unauthorized : Missing bearer or basic authentication` "
+                        "car aucun compte n'est actuellement authentifié sur cette machine.\n\n"
+                        "👉 **Pour vous connecter avec votre compte ChatGPT (gratuit/quota inclus) :**\n"
+                        "1. Ouvrez l'onglet **Terminal** dans le panneau latéral (ou dans les Paramètres).\n"
+                        "2. Tapez la commande suivante :\n"
+                        "   ```bash\n"
+                        "   codex login --device-auth\n"
+                        "   ```\n"
+                        "3. Ouvrez le lien d'autorisation affiché (ex: `https://auth.openai.com/device`) sur votre téléphone ou PC et saisissez le code.\n"
+                        "4. Une fois validé, revenez dans le chat : Codex utilisera immédiatement votre compte ChatGPT !\n\n"
+                        "*(Alternative : vous pouvez aussi renseigner une clé API OpenAI dans les Paramètres)*"
+                    )
+                    yield {"type": "error", "error": friendly_err}
+                    return
+
                 yield {
                     "type": "error",
                     "error": f"Erreur Codex CLI ({ret_code}) :\n{err_details}",

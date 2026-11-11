@@ -62,8 +62,9 @@ class ProviderFactory:
             default_model=cfg.get("ollama_model", "llama3.2"),
         )
 
-        # 5. OpenAI Codex CLI (ChatGPT Account)
-        self._providers["codex"] = CodexProvider()
+        # 5. OpenAI Codex CLI (ChatGPT Account or API Key)
+        codex_key = os.getenv("OPENAI_API_KEY") or cfg.get("codex_api_key", "")
+        self._providers["codex"] = CodexProvider(api_key=codex_key)
 
     def get_active_provider_id(self) -> str:
         # Default to 'agy' if not set
@@ -100,6 +101,11 @@ class ProviderFactory:
                 cfg["ollama_url"] = new_config["url"].strip()
             if "model" in new_config:
                 cfg["ollama_model"] = new_config["model"].strip()
+        elif provider_id == "codex":
+            if "api_key" in new_config:
+                cfg["codex_api_key"] = new_config["api_key"].strip()
+            if "model" in new_config:
+                cfg["codex_model"] = new_config["model"].strip()
 
         self.auth_manager.save_config()
         # Re-initialize providers with updated settings
