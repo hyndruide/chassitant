@@ -1277,17 +1277,45 @@
 
     } catch (err) {
       clearInterval(timerInterval);
-      setThinking(false);
       if (err.name === 'AbortError') {
+        setThinking(false);
         // Handled cleanly by cancelCurrentTurn()
         return;
       }
-      console.error('Send stream failed:', err);
+      console.warn('Send stream failed or connection interrupted:', err);
+
+      // Attempt auto-recovery: check if backend is still processing or has completed
+      try {
+        const checkResp = await apiCall(`/api/conversations/${convId}`);
+        if (checkResp && checkResp.conversation) {
+          const activeTurn = checkResp.conversation.active_turn;
+          if (activeTurn && activeTurn.is_running) {
+            console.log('Turn is still active on backend, attempting stream reconnection...');
+            if (streamRow) streamRow.remove();
+            await subscribeToConversationStream(convId, activeTurn.accumulated_text || accumulatedText);
+            return;
+          }
+
+          // If turn completed while connection blipped, load real completed conversation
+          const lastMsg = checkResp.conversation.messages?.slice(-1)[0];
+          if (lastMsg && lastMsg.role === 'assistant') {
+            setThinking(false);
+            if (streamRow) streamRow.remove();
+            state.activeConversation = checkResp.conversation;
+            updateChatView();
+            return;
+          }
+        }
+      } catch (recoveryErr) {
+        console.warn('Auto-recovery check failed:', recoveryErr);
+      }
+
+      setThinking(false);
       if (streamRow) streamRow.remove();
 
       const errorMsg = {
         role: 'assistant',
-        text: `⚠️ **Erreur lors de la communication avec l'assistant :**\n\n${err.message}`,
+        text: `⚠️ **Erreur lors de la communication avec l'assistant :**\n\n${err.message || 'network error'}\n\n*(Si le traitement était en cours, actualisez la page pour récupérer la réponse).*`,
         created_at: Date.now() / 1000,
       };
       state.activeConversation.messages.push(errorMsg);

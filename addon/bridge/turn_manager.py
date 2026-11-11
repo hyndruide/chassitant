@@ -306,7 +306,6 @@ class TurnManager:
                     duration=final_duration,
                     steps=steps_log,
                 )
-                turn.status = "completed"
                 turn.result = assistant_msg
                 logger.info("Turn completed for conv %s (saved %d chars)", conv_id, len(full_text))
                 turn.broadcast({
@@ -314,6 +313,7 @@ class TurnManager:
                     "message": assistant_msg,
                     "conversation": conv_store.get_conversation(conv_id),
                 })
+                turn.status = "completed"
             else:
                 err_text = "L'assistant n'a renvoyé aucune réponse."
                 assistant_msg = conv_store.add_message(

@@ -45,6 +45,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
     """HTTP Request Handler for Chassitant Web UI & Bridge API."""
 
     server_version = "Chassitant/1.1"
+    protocol_version = "HTTP/1.1"
 
     @property
     def auth_manager(self) -> AuthManager:
@@ -155,6 +156,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/event-stream; charset=utf-8")
         self.send_header("Cache-Control", "no-cache, no-transform")
         self.send_header("Connection", "keep-alive")
+        self.send_header("Content-Encoding", "identity")
         self.send_header("X-Accel-Buffering", "no")
         self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
@@ -170,6 +172,15 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                     event = q.get(timeout=1.0)
                 except queue.Empty:
                     if turn.status != "running":
+                        # Drain any final queued events
+                        while not q.empty():
+                            try:
+                                ev = q.get_nowait()
+                                line = f"data: {json.dumps(ev, ensure_ascii=False)}\n\n"
+                                self.wfile.write(line.encode("utf-8"))
+                                self.wfile.flush()
+                            except Exception:
+                                break
                         break
                     # Keep-alive comment for reverse-proxies
                     try:
@@ -369,7 +380,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.8.7",
+                    "version": "1.8.8",
                     "active_provider": active_prov.provider_id,
                     "provider_name": active_prov.display_name,
                     "agy_binary": self.agy_client.binary_path,
