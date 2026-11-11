@@ -845,31 +845,89 @@
 
   async function copyToClipboard(text) {
     if (!text) return false;
-    if (navigator.clipboard && window.isSecureContext) {
-      try {
-        await navigator.clipboard.writeText(text);
-        return true;
-      } catch (e) {}
-    }
 
+    // 1. Synchronous execCommand copy while transient user activation is fresh.
+    // Critical inside Home Assistant Ingress iframes where navigator.clipboard
+    // is blocked by iframe Permissions Policy without 'allow="clipboard-write"'.
     try {
       const textArea = document.createElement('textarea');
       textArea.value = text;
+      // Do NOT set readonly or disabled, otherwise iOS Safari refuses to select()!
+      // Keep textarea in viewport at top-left with minimal size & opacity so layout engine allows focus & selection.
+      textArea.setAttribute('tabindex', '-1');
+      textArea.setAttribute('aria-hidden', 'true');
       textArea.style.position = 'fixed';
-      textArea.style.left = '-999999px';
-      textArea.style.top = '-999999px';
-      textArea.setAttribute('readonly', '');
-      textArea.style.opacity = '0';
+      textArea.style.top = '0';
+      textArea.style.left = '0';
+      textArea.style.width = '2em';
+      textArea.style.height = '2em';
+      textArea.style.padding = '0';
+      textArea.style.border = 'none';
+      textArea.style.outline = 'none';
+      textArea.style.boxShadow = 'none';
+      textArea.style.background = 'transparent';
+      textArea.style.color = 'transparent';
+      textArea.style.opacity = '0.01';
+      textArea.style.pointerEvents = 'none';
+      textArea.style.zIndex = '-9999';
+
       document.body.appendChild(textArea);
-      textArea.focus();
+
+      // Focus and select range for iOS WebKit & desktop browsers
+      textArea.focus({ preventScroll: true });
       textArea.select();
+      textArea.setSelectionRange(0, text.length);
+
       const successful = document.execCommand('copy');
       document.body.removeChild(textArea);
-      return successful;
-    } catch (err) {
-      console.error('Copy to clipboard failed:', err);
-      return false;
+
+      if (successful) {
+        return true;
+      }
+    } catch (e) {
+      console.debug('Synchronous execCommand copy failed, trying fallbacks:', e);
     }
+
+    // 2. Modern Clipboard API fallback (works on top-level pages or iframes with clipboard-write permission)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch (err) {
+        console.warn('navigator.clipboard fallback failed:', err);
+      }
+    }
+
+    // 3. Selection API fallback for iOS Safari edge-cases
+    try {
+      const span = document.createElement('span');
+      span.textContent = text;
+      span.style.whiteSpace = 'pre';
+      span.style.position = 'fixed';
+      span.style.top = '0';
+      span.style.left = '0';
+      span.style.opacity = '0.01';
+      span.style.pointerEvents = 'none';
+      document.body.appendChild(span);
+
+      const range = document.createRange();
+      range.selectNodeContents(span);
+      const sel = window.getSelection();
+      if (sel) {
+        sel.removeAllRanges();
+        sel.addRange(range);
+        const successful = document.execCommand('copy');
+        sel.removeAllRanges();
+        document.body.removeChild(span);
+        if (successful) return true;
+      } else {
+        document.body.removeChild(span);
+      }
+    } catch (e) {
+      console.debug('Selection API fallback failed:', e);
+    }
+
+    return false;
   }
 
   function setupCodeBlockActions(container) {
@@ -903,7 +961,7 @@
 
       const copyBtn = header.querySelector('.btn-copy-code');
       copyBtn.addEventListener('click', async () => {
-        const textToCopy = code ? code.innerText : pre.innerText;
+        const textToCopy = (code ? (code.innerText || code.textContent || '') : (pre.innerText || pre.textContent || '')).trim();
         const ok = await copyToClipboard(textToCopy);
         if (ok) {
           copyBtn.textContent = '✓ Copié !';
@@ -2018,18 +2076,23 @@
 
       let textToCopy = '';
       const rawHolder = bubble.querySelector('.raw-text-source');
-      if (rawHolder && rawHolder.value) {
-        textToCopy = rawHolder.value;
-      } else {
+      if (rawHolder) {
+        textToCopy = (rawHolder.value || rawHolder.textContent || '').trim();
+      }
+
+      if (!textToCopy) {
         const clone = bubble.cloneNode(true);
         const unwanted = clone.querySelectorAll(
           '.reasoning-details, .message-footer, .message-meta, .message-actions, .raw-text-source, script, style'
         );
         unwanted.forEach((n) => n.remove());
-        textToCopy = clone.innerText.trim();
+        textToCopy = (clone.innerText || clone.textContent || '').trim();
       }
 
-      if (!textToCopy) return;
+      if (!textToCopy) {
+        console.warn('No text found to copy in bubble');
+        return;
+      }
 
       const originalHtml = btn.innerHTML;
       const ok = await copyToClipboard(textToCopy);
