@@ -16,6 +16,102 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("chassitant.turn_manager")
 
+# Context window reference table (in tokens)
+MODEL_CONTEXT_LIMITS: Dict[str, int] = {
+    # Gemini (1M or 2M)
+    "gemini-2.5-flash": 1_048_576,
+    "gemini-2.0-flash": 1_048_576,
+    "gemini-1.5-flash": 1_048_576,
+    "gemini-3.8-flash": 1_048_576,
+    "gemini-2.5-pro": 2_097_152,
+    "gemini-1.5-pro": 2_097_152,
+    # Claude (200k)
+    "claude-3-5-sonnet": 200_000,
+    "claude-3-7-sonnet": 200_000,
+    "claude-3-5-haiku": 200_000,
+    "claude-sonnet-4-6": 200_000,
+    "claude-opus-4-6": 200_000,
+    # OpenAI & Codex
+    "gpt-4o": 128_000,
+    "gpt-4o-mini": 128_000,
+    "o3-mini": 200_000,
+    "o1": 200_000,
+    "o1-mini": 128_000,
+    # Open source & Groq / Mistral
+    "llama-3.3-70b": 128_000,
+    "llama-3.1-70b": 128_000,
+    "llama-3.1-8b": 128_000,
+    "mistral-large": 128_000,
+    "codestral": 256_000,
+    "gpt-oss-120b": 128_000,
+}
+
+
+def get_model_context_limit(provider_id: str, model: Optional[str] = None) -> int:
+    """Return max context window tokens for given provider and model."""
+    m_clean = (model or "").lower().strip()
+    p_clean = (provider_id or "").lower().strip()
+
+    for k, limit in MODEL_CONTEXT_LIMITS.items():
+        if k in m_clean:
+            return limit
+
+    if p_clean == "agy" or "gemini" in m_clean:
+        return 1_048_576
+    elif "claude" in m_clean or p_clean == "anthropic":
+        return 200_000
+    elif p_clean == "codex" or "o3" in m_clean or "o1" in m_clean:
+        return 200_000 if ("o3" in m_clean or "o1" in m_clean) else 128_000
+    return 128_000
+
+
+def normalize_token_usage(
+    raw_usage: Optional[Dict[str, Any]],
+    provider_id: str,
+    model: Optional[str],
+    prompt_text: str = "",
+    response_text: str = "",
+) -> Dict[str, Any]:
+    """Standardize token usage across all LLM providers and compute remaining capacity."""
+    context_limit = get_model_context_limit(provider_id, model)
+    effective_model = model or "default"
+
+    raw = raw_usage or {}
+    has_exact = bool(raw.get("total_tokens") or raw.get("input_tokens") or raw.get("prompt_tokens"))
+
+    if has_exact:
+        input_tokens = int(raw.get("input_tokens") or raw.get("prompt_tokens") or 0)
+        output_tokens = int(raw.get("output_tokens") or raw.get("completion_tokens") or 0)
+        thinking_tokens = int(raw.get("thinking_tokens") or raw.get("reasoning_tokens") or 0)
+        total_tokens = int(raw.get("total_tokens") or (input_tokens + output_tokens))
+        source = "exact"
+    else:
+        # Standard token heuristic: ~3.8 chars per token in French / code
+        chars_in = len(prompt_text) + 2000
+        chars_out = len(response_text)
+        input_tokens = max(1, int(chars_in / 3.8))
+        output_tokens = max(1, int(chars_out / 3.8))
+        thinking_tokens = 0
+        total_tokens = input_tokens + output_tokens
+        source = "estimated"
+
+    remaining_tokens = max(0, context_limit - total_tokens)
+    remaining_pct = round((remaining_tokens / max(1, context_limit)) * 100, 1)
+    used_pct = round((total_tokens / max(1, context_limit)) * 100, 1)
+
+    return {
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "thinking_tokens": thinking_tokens,
+        "total_tokens": total_tokens,
+        "context_limit": context_limit,
+        "remaining_tokens": remaining_tokens,
+        "remaining_percent": remaining_pct,
+        "used_percent": used_pct,
+        "model": effective_model,
+        "source": source,
+    }
+
 
 class ActiveTurn:
     """Represents a turn running in the background for a conversation."""
@@ -209,6 +305,8 @@ class TurnManager:
         full_text = ""
         final_tokens = None
         final_duration = None
+        final_usage = None
+        active_provider_id = getattr(provider, "provider_id", "agy")
 
         try:
             try:
@@ -268,8 +366,17 @@ class TurnManager:
                     turn.accumulated_text = full_text
                 elif etype == "done":
                     full_text = event.get("response", "") or full_text
-                    final_tokens = event.get("usage", {}).get("total_tokens")
+                    raw_usage = event.get("usage", {})
+                    final_usage = normalize_token_usage(
+                        raw_usage=raw_usage,
+                        provider_id=active_provider_id,
+                        model=model,
+                        prompt_text=effective_prompt,
+                        response_text=full_text,
+                    )
+                    final_tokens = final_usage.get("total_tokens")
                     final_duration = event.get("duration_seconds")
+                    event["usage"] = final_usage
 
                 turn.steps = steps_log
                 turn.broadcast(event)
@@ -298,6 +405,16 @@ class TurnManager:
 
             # Persist assistant message even if all web clients disconnected!
             if full_text.strip():
+                if final_usage is None:
+                    final_usage = normalize_token_usage(
+                        raw_usage={},
+                        provider_id=active_provider_id,
+                        model=model,
+                        prompt_text=effective_prompt,
+                        response_text=full_text,
+                    )
+                    final_tokens = final_usage.get("total_tokens")
+
                 assistant_msg = conv_store.add_message(
                     conv_id=conv_id,
                     role="assistant",
@@ -305,6 +422,7 @@ class TurnManager:
                     tokens=final_tokens,
                     duration=final_duration,
                     steps=steps_log,
+                    usage=final_usage,
                 )
                 turn.result = assistant_msg
                 logger.info("Turn completed for conv %s (saved %d chars)", conv_id, len(full_text))

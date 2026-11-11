@@ -106,6 +106,8 @@
     inputHintText: document.getElementById('input-hint-text'),
     activeModelHint: document.getElementById('active-model-hint'),
     topbarModelText: document.getElementById('topbar-model-text'),
+    topbarContextBadge: document.getElementById('topbar-context-badge'),
+    topbarContextText: document.getElementById('topbar-context-text'),
     btnTopbarMcp: document.getElementById('btn-topbar-mcp'),
     topbarMcpDot: document.getElementById('topbar-mcp-dot'),
     topbarMcpText: document.getElementById('topbar-mcp-text'),
@@ -600,6 +602,7 @@
             el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(ev.message));
             setupCodeBlockActions(el.messagesList);
           }
+          updateContextGauge(state.activeConversation);
           scrollToBottom();
         } else if (ev.type === 'cancelled') {
           clearInterval(timerInterval);
@@ -721,6 +724,7 @@
       setupCodeBlockActions(el.messagesList);
     }
 
+    updateContextGauge(conv);
     scrollToBottom();
   }
 
@@ -757,6 +761,105 @@
       }
     }
     return label;
+  }
+
+  function formatTokens(n) {
+    if (n === undefined || n === null) return '0';
+    const num = Number(n);
+    if (isNaN(num)) return '0';
+    if (num >= 1000000) return (num / 1000000).toFixed(2).replace(/\.00$/, '') + 'M';
+    if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+    return num.toLocaleString();
+  }
+
+  function renderTokenBadge(usage, fallbackTokens) {
+    if (!usage && !fallbackTokens) return '';
+    const total = usage && usage.total_tokens !== undefined ? usage.total_tokens : fallbackTokens;
+    if (!total) return '';
+    const totalFmt = formatTokens(total);
+    const remPct = usage && usage.remaining_percent !== undefined ? usage.remaining_percent : null;
+    const label = remPct !== null ? `⚡ ${totalFmt} • ${remPct}% libre` : `⚡ ${totalFmt} tokens`;
+
+    if (!usage) {
+      return `<span class="token-pill">${escapeHtml(label)}</span>`;
+    }
+
+    const inFmt = formatTokens(usage.input_tokens);
+    const outFmt = formatTokens(usage.output_tokens);
+    const thinkRow = usage.thinking_tokens > 0 
+      ? `<div>🧠 Réflexion : <strong>${formatTokens(usage.thinking_tokens)}</strong> tokens</div>` 
+      : '';
+    const remTokensFmt = formatTokens(usage.remaining_tokens);
+    const limitFmt = formatTokens(usage.context_limit);
+    const sourceLabel = usage.source === 'exact' ? '✅ Source : LLM (exact)' : '⚡ Source : Estimée';
+
+    return `
+      <span class="token-pill" tabindex="0" title="Consommation de tokens & Contexte restant">
+        ${escapeHtml(label)}
+        <div class="token-pill-popup">
+          <div style="font-weight: 600; margin-bottom: 4px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 3px;">
+            Consommation : ${Number(total).toLocaleString()} tokens
+          </div>
+          <div>📥 Entrée (Prompt & Contexte) : <strong>${inFmt}</strong> tokens</div>
+          ${thinkRow}
+          <div>📤 Sortie (Réponse) : <strong>${outFmt}</strong> tokens</div>
+          <div style="margin-top: 4px; padding-top: 4px; border-top: 1px solid rgba(255,255,255,0.1);">
+            📊 Fenêtre : <strong>${remPct}% libre</strong> (${remTokensFmt} restants sur ${limitFmt})
+          </div>
+          <div style="margin-top: 2px; color: #9ca3af; font-size: 10px;">${sourceLabel}</div>
+        </div>
+      </span>
+    `;
+  }
+
+  function updateContextGauge(conv) {
+    if (!el.topbarContextBadge || !el.topbarContextText) return;
+    if (!conv) {
+      el.topbarContextBadge.style.display = 'none';
+      return;
+    }
+
+    const messages = conv.messages || [];
+    let latestUsage = null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'assistant' && (messages[i].usage || messages[i].tokens)) {
+        latestUsage = messages[i].usage || { total_tokens: messages[i].tokens };
+        break;
+      }
+    }
+
+    if (!latestUsage || latestUsage.remaining_percent === undefined) {
+      el.topbarContextBadge.style.display = 'none';
+      if (el.btnCompactConv) el.btnCompactConv.classList.remove('alert-compact');
+      return;
+    }
+
+    const remPct = latestUsage.remaining_percent;
+    const remTokens = formatTokens(latestUsage.remaining_tokens);
+    const limitTokens = formatTokens(latestUsage.context_limit);
+
+    el.topbarContextBadge.style.display = 'inline-flex';
+    el.topbarContextText.textContent = `${remPct}% libre`;
+    el.topbarContextBadge.title = `Contexte de la discussion : ${remPct}% libre (${remTokens} tokens restants sur ${limitTokens} max)\nModèle : ${latestUsage.model || 'Actif'} (cliquez pour détails)`;
+
+    el.topbarContextBadge.classList.remove('good', 'warning', 'danger');
+    if (remPct > 50) {
+      el.topbarContextBadge.classList.add('good');
+    } else if (remPct >= 20) {
+      el.topbarContextBadge.classList.add('warning');
+    } else {
+      el.topbarContextBadge.classList.add('danger');
+    }
+
+    if (el.btnCompactConv) {
+      if (remPct < 20) {
+        el.btnCompactConv.classList.add('alert-compact');
+        el.btnCompactConv.title = `⚠️ Contexte presque saturé (${remPct}% libre) ! Cliquez pour compacter.`;
+      } else {
+        el.btnCompactConv.classList.remove('alert-compact');
+        el.btnCompactConv.title = 'Compacter le contexte de cette conversation pour accélérer les réponses';
+      }
+    }
   }
 
   function renderMessageHtml(msg) {
@@ -815,7 +918,9 @@
     const metaParts = [];
     if (timeStr) metaParts.push(timeStr);
     if (!isUser && msg.duration) metaParts.push(`${msg.duration.toFixed(1)}s`);
-    if (!isUser && msg.tokens) metaParts.push(`${msg.tokens} tokens`);
+    if (!isUser && (msg.usage || msg.tokens)) {
+      metaParts.push(renderTokenBadge(msg.usage, msg.tokens));
+    }
 
     let footerHtml = '';
     if (!isUser) {
@@ -1261,6 +1366,7 @@
             el.messagesList.insertAdjacentHTML('beforeend', renderMessageHtml(ev.message));
             setupCodeBlockActions(el.messagesList);
           }
+          updateContextGauge(state.activeConversation);
           scrollToBottom();
         } else if (type === 'error') {
           clearInterval(timerInterval);
@@ -2110,6 +2216,43 @@
     el.searchInput.addEventListener('input', () => {
       renderDrawerConversations();
     });
+
+    // Topbar Context Gauge click for detailed overview
+    if (el.topbarContextBadge) {
+      el.topbarContextBadge.addEventListener('click', () => {
+        const conv = state.activeConversation;
+        const messages = (conv && conv.messages) || [];
+        let latest = null;
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === 'assistant' && (messages[i].usage || messages[i].tokens)) {
+            latest = messages[i].usage || { total_tokens: messages[i].tokens };
+            break;
+          }
+        }
+        if (latest) {
+          const totalStr = latest.total_tokens ? Number(latest.total_tokens).toLocaleString() : 'N/A';
+          const inStr = latest.input_tokens ? Number(latest.input_tokens).toLocaleString() : 'N/A';
+          const outStr = latest.output_tokens ? Number(latest.output_tokens).toLocaleString() : 'N/A';
+          const thinkStr = latest.thinking_tokens ? `\n• 🧠 Réflexion : ${Number(latest.thinking_tokens).toLocaleString()} tokens` : '';
+          const remStr = latest.remaining_tokens ? Number(latest.remaining_tokens).toLocaleString() : 'N/A';
+          const limitStr = latest.context_limit ? Number(latest.context_limit).toLocaleString() : 'N/A';
+          const remPct = latest.remaining_percent !== undefined ? `${latest.remaining_percent}%` : 'N/A';
+          const srcStr = latest.source === 'exact' ? 'Exacte (fournie par le LLM)' : 'Estimée';
+
+          alert(
+            `📊 Contexte & Consommation LLM (Dernier échange) :\n\n` +
+            `• Modèle : ${latest.model || state.settings.model || 'Actif'}\n` +
+            `• 📥 Entrée (Prompt & Historique) : ${inStr} tokens\n` +
+            `• 📤 Sortie (Réponse) : ${outStr} tokens` +
+            thinkStr + '\n' +
+            `• ⚡ Total échange : ${totalStr} tokens\n\n` +
+            `• 📊 Capacité restante : ${remPct} libre (${remStr} / ${limitStr} tokens max)\n` +
+            `• 🏷️ Précision : ${srcStr}\n\n` +
+            `💡 Astuce : Si le contexte se remplit (< 20% libre), cliquez sur le balai 🧹 pour compacter la mémoire de la discussion.`
+          );
+        }
+      });
+    }
 
     // Prompt input auto-resize & keyboard shortcuts
     el.promptInput.addEventListener('input', () => {

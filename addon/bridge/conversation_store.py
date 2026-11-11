@@ -59,6 +59,11 @@ class ConversationStore:
         for conv_id, data in self._conversations.items():
             messages = data.get("messages", [])
             last_message = messages[-1]["text"] if messages else ""
+            last_usage = None
+            for m in reversed(messages):
+                if m.get("role") == "assistant" and m.get("usage"):
+                    last_usage = m["usage"]
+                    break
             result.append(
                 {
                     "id": conv_id,
@@ -68,6 +73,7 @@ class ConversationStore:
                     "updated_at": data.get("updated_at", time.time()),
                     "message_count": len(messages),
                     "last_message_preview": (last_message[:60] + "...") if len(last_message) > 60 else last_message,
+                    "last_usage": last_usage,
                 }
             )
         result.sort(key=lambda c: c["updated_at"], reverse=True)
@@ -125,6 +131,7 @@ class ConversationStore:
         tokens: Optional[int] = None,
         duration: Optional[float] = None,
         steps: Optional[List[Dict[str, Any]]] = None,
+        usage: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Add a message to a conversation thread."""
         if conv_id not in self._conversations:
@@ -139,6 +146,7 @@ class ConversationStore:
             "tokens": tokens,
             "duration": duration,
             "steps": steps or [],
+            "usage": usage,
         }
         conv["messages"].append(msg)
         conv["updated_at"] = time.time()

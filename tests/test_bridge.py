@@ -231,6 +231,79 @@ class TestBridgeServer(unittest.TestCase):
         self.assertIn("--ephemeral", cmd)
         self.assertNotIn("--model", cmd)
 
+    def test_token_usage_normalization(self) -> None:
+        """Verify normalization of token metrics and context remaining calculation."""
+        from bridge.turn_manager import normalize_token_usage, get_model_context_limit
+
+        # 1. Gemini on agy (1M context)
+        raw_agy = {
+            "input_tokens": 10500,
+            "output_tokens": 500,
+            "thinking_tokens": 200,
+            "total_tokens": 11000,
+        }
+        res = normalize_token_usage(raw_agy, provider_id="agy", model="gemini-2.5-flash")
+        self.assertEqual(res["context_limit"], 1_048_576)
+        self.assertEqual(res["total_tokens"], 11000)
+        self.assertEqual(res["input_tokens"], 10500)
+        self.assertEqual(res["thinking_tokens"], 200)
+        self.assertEqual(res["remaining_tokens"], 1_048_576 - 11000)
+        self.assertAlmostEqual(res["remaining_percent"], round((1_048_576 - 11000) / 1_048_576 * 100, 1))
+        self.assertEqual(res["source"], "exact")
+
+        # 2. Claude (200k context)
+        self.assertEqual(get_model_context_limit("agy", "claude-3-5-sonnet"), 200_000)
+
+        # 3. GPT-4o (128k context)
+        self.assertEqual(get_model_context_limit("codex", "gpt-4o"), 128_000)
+
+        # 4. Fallback estimation
+        est = normalize_token_usage({}, provider_id="codex", model="gpt-4o", prompt_text="A" * 380, response_text="B" * 380)
+        self.assertEqual(est["source"], "estimated")
+        self.assertTrue(est["input_tokens"] > 0)
+        self.assertTrue(est["output_tokens"] > 0)
+        self.assertEqual(est["context_limit"], 128_000)
+
+    def test_conversation_store_usage_persistence(self) -> None:
+        """Verify usage data is persisted and returned in list_conversations and get_conversation."""
+        from bridge.conversation_store import ConversationStore
+        import tempfile
+        import shutil
+
+        temp_dir = Path(tempfile.mkdtemp())
+        try:
+            store = ConversationStore(data_dir=temp_dir)
+            conv = store.create_conversation(title="Test Usage Thread")
+            usage_data = {
+                "input_tokens": 1200,
+                "output_tokens": 80,
+                "total_tokens": 1280,
+                "remaining_percent": 99.0,
+            }
+            msg = store.add_message(
+                conv_id=conv["id"],
+                role="assistant",
+                text="Message avec usage",
+                tokens=1280,
+                duration=1.5,
+                usage=usage_data,
+            )
+            self.assertEqual(msg["usage"], usage_data)
+
+            # Reload from disk
+            store2 = ConversationStore(data_dir=temp_dir)
+            fetched = store2.get_conversation(conv["id"])
+            self.assertIsNotNone(fetched)
+            self.assertEqual(len(fetched["messages"]), 1)
+            self.assertEqual(fetched["messages"][0]["usage"], usage_data)
+
+            # Check list_conversations includes last_usage
+            conv_list = store2.list_conversations()
+            self.assertEqual(len(conv_list), 1)
+            self.assertEqual(conv_list[0]["last_usage"], usage_data)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

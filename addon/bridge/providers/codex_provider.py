@@ -323,6 +323,7 @@ class CodexProvider(BaseProvider):
                 "type": "done",
                 "response": final_text,
                 "duration_seconds": duration,
+                "usage": {},
             }
 
         except Exception as err:

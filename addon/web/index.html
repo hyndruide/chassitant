@@ -78,6 +78,10 @@
         </div>
 
         <div class="topbar-right">
+          <div id="topbar-context-badge" class="badge-tag context-gauge desktop-only" style="display: none; cursor: pointer;" title="Capacité restante de la fenêtre de contexte (cliquez pour afficher les métriques complètes)">
+            <span class="context-gauge-icon">📊</span>
+            <span id="topbar-context-text">--% libre</span>
+          </div>
           <button id="btn-effort-toggle" class="badge-tag" style="cursor: pointer;" title="Niveau de réflexion de l'IA (cliquer pour changer : Rapide / Équilibré / Approfondi)">
             <span id="effort-toggle-text">⚡ Rapide</span>
           </button>
@@ -414,7 +418,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.8.9</h3>
+            <h3>Françoise v1.8.10</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

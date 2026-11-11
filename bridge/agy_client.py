@@ -491,6 +491,7 @@ class AgyClient:
                         "response": resp_text,
                         "status": "SUCCESS",
                         "conversation_id": conversation_id,
+                        "usage": {},
                     }
                 else:
                     err_msg = stderr_text.strip() or f"Le processus agy s'est arrêté (code {proc.returncode})"

@@ -150,6 +150,7 @@ class OpenAICompatibleProvider(BaseProvider):
 
         accumulated_full_text = ""
         step_counter = 0
+        last_usage: Dict[str, Any] = {}
         start_time = time.time()
         max_tool_rounds = 5  # safety limit for tool calls loop
 
@@ -162,6 +163,7 @@ class OpenAICompatibleProvider(BaseProvider):
                 "model": chosen_model,
                 "messages": messages,
                 "stream": True,
+                "stream_options": {"include_usage": True},
                 "tools": HA_TOOL_DEFINITIONS,
                 "tool_choice": "auto",
             }
@@ -205,6 +207,9 @@ class OpenAICompatibleProvider(BaseProvider):
                             chunk = json.loads(data_str)
                         except Exception:
                             continue
+
+                        if chunk.get("usage"):
+                            last_usage = chunk["usage"]
 
                         choices = chunk.get("choices", [])
                         if not choices:
@@ -313,4 +318,5 @@ class OpenAICompatibleProvider(BaseProvider):
             "type": "done",
             "response": accumulated_full_text,
             "duration_seconds": duration,
+            "usage": last_usage,
         }
