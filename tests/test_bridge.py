@@ -5,6 +5,7 @@ import os
 import threading
 import time
 import unittest
+from unittest import mock
 from http import HTTPStatus
 from pathlib import Path
 from urllib import request
@@ -124,7 +125,7 @@ class TestBridgeServer(unittest.TestCase):
             self.assertEqual(resp.status, HTTPStatus.OK)
             data = json.loads(resp.read().decode("utf-8"))
             self.assertTrue(data.get("success"))
-            self.assertEqual(data.get("version"), "1.8.18")
+            self.assertEqual(data.get("version"), "1.8.19")
             self.assertIn("provider_authenticated", data)
             self.assertIn("active_provider", data)
             self.assertTrue(data.get("agy_installed"))
@@ -485,6 +486,75 @@ class TestBridgeServer(unittest.TestCase):
             self.assertEqual(report_usage["total_tokens"], 0)
             self.assertEqual(report_usage["context_limit"], 1_048_576)
             self.assertEqual(report_usage["remaining_percent"], 99.9)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
+    def test_rtk_status_endpoint(self) -> None:
+        """Verify /api/rtk/status returns installed state and telemetry summary."""
+        url = f"http://127.0.0.1:{self.port}/api/rtk/status"
+        req = request.Request(url, headers={"Authorization": f"Bearer {self.token}"})
+
+        # Test when rtk is missing
+        with mock.patch("shutil.which", return_value=None), mock.patch("pathlib.Path.is_file", return_value=False):
+            with request.urlopen(req) as resp:
+                self.assertEqual(resp.status, HTTPStatus.OK)
+                data = json.loads(resp.read().decode("utf-8"))
+                self.assertTrue(data.get("success"))
+                self.assertFalse(data.get("installed"))
+
+        # Test when rtk is present
+        mock_res = mock.MagicMock()
+        mock_res.stdout = json.dumps({
+            "summary": {
+                "total_commands": 42,
+                "total_input": 150000,
+                "total_output": 35000,
+                "total_saved": 115000,
+                "avg_savings_pct": 76.6,
+            }
+        })
+        with mock.patch("shutil.which", return_value="/usr/local/bin/rtk"), mock.patch("subprocess.run", return_value=mock_res):
+            with request.urlopen(req) as resp:
+                self.assertEqual(resp.status, HTTPStatus.OK)
+                data = json.loads(resp.read().decode("utf-8"))
+                self.assertTrue(data.get("success"))
+                self.assertTrue(data.get("installed"))
+                self.assertEqual(data.get("summary", {}).get("total_commands"), 42)
+                self.assertEqual(data.get("summary", {}).get("total_saved"), 115000)
+
+    def test_usage_report_with_rtk(self) -> None:
+        """Verify build_usage_report includes RTK metrics when available."""
+        from bridge.turn_manager import build_usage_report
+        from bridge.conversation_store import ConversationStore
+        from bridge.providers.agy_provider import AgyProvider
+        import tempfile
+        import shutil
+
+        temp_dir = Path(tempfile.mkdtemp())
+        try:
+            store = ConversationStore(data_dir=temp_dir)
+            conv = store.create_conversation(title="Test RTK Usage")
+            provider = AgyProvider(self.agy_cli)
+
+            mock_res = mock.MagicMock()
+            mock_res.returncode = 0
+            mock_res.stdout = json.dumps({
+                "summary": {
+                    "total_commands": 18,
+                    "total_saved": 54200,
+                    "avg_savings_pct": 81.2,
+                }
+            })
+            with mock.patch("shutil.which", return_value="/usr/local/bin/rtk"), mock.patch("subprocess.run", return_value=mock_res):
+                report_md, _ = build_usage_report(
+                    conv_store=store,
+                    conv_id=conv["id"],
+                    provider=provider,
+                    model="gemini-2.5-flash",
+                )
+                self.assertIn("Compression Terminal & Shell (RTK)", report_md)
+                self.assertIn("54,200", report_md)
+                self.assertIn("81.2%", report_md)
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 

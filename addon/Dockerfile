@@ -35,6 +35,15 @@ RUN curl -fsSL https://antigravity.google/cli/install.sh | bash \
 RUN curl -fsSL https://releases.openai.com/codex/install.sh | BIN_DIR=/usr/local/bin CODEX_HOME=/root/.codex sh || true \
     && chmod +x /usr/local/bin/codex || true
 
+# Install RTK (Rust Token Killer) for terminal output compression and token optimization
+RUN ARCH="$(uname -m)" && \
+    if [ "$ARCH" = "x86_64" ] || [ "$ARCH" = "amd64" ]; then \
+        curl -fsSL https://github.com/rtk-ai/rtk/releases/latest/download/rtk-x86_64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/bin rtk; \
+    elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then \
+        curl -fsSL https://github.com/rtk-ai/rtk/releases/latest/download/rtk-aarch64-unknown-linux-musl.tar.gz | tar -xz -C /usr/local/bin rtk; \
+    fi && \
+    chmod +x /usr/local/bin/rtk || true
+
 # Install ha-mcp (Home Assistant MCP Server)
 RUN pip3 install --no-cache-dir --break-system-packages ha-mcp
 

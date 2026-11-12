@@ -243,6 +243,9 @@
     providerQuotaIcon: document.getElementById('provider-quota-icon'),
     providerQuotaBadge: document.getElementById('provider-quota-badge'),
     providerQuotaContent: document.getElementById('provider-quota-content'),
+    rtkStatusCard: document.getElementById('rtk-status-card'),
+    rtkStatusBadge: document.getElementById('rtk-status-badge'),
+    rtkStatusContent: document.getElementById('rtk-status-content'),
     btnTopbarMcp: document.getElementById('btn-topbar-mcp'),
     topbarMcpDot: document.getElementById('topbar-mcp-dot'),
     topbarMcpText: document.getElementById('topbar-mcp-text'),
@@ -1022,6 +1025,52 @@
     }
   }
 
+  async function loadRtkStatus() {
+    if (!el.rtkStatusBadge || !el.rtkStatusContent) return;
+    try {
+      const data = await apiCall('/api/rtk/status');
+      if (!data || !data.success) {
+        el.rtkStatusBadge.textContent = 'Non configuré';
+        el.rtkStatusBadge.className = 'auth-status-tag';
+        return;
+      }
+
+      if (!data.installed) {
+        el.rtkStatusBadge.textContent = 'Non installé';
+        el.rtkStatusBadge.className = 'auth-status-tag';
+        el.rtkStatusContent.innerHTML = `
+          <p style="margin: 0; color: var(--text-secondary);">Le binaire <code>rtk</code> (Rust Token Killer) sera actif dès le redémarrage ou la prochaine mise à jour de l'add-on.</p>
+        `;
+        return;
+      }
+
+      const s = data.summary || {};
+      const cmds = s.total_commands || 0;
+      const saved = s.total_saved || 0;
+      const pct = (s.avg_savings_pct || 0).toFixed(1);
+
+      el.rtkStatusBadge.textContent = 'Actif';
+      el.rtkStatusBadge.className = 'auth-status-tag ok';
+      el.rtkStatusContent.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 6px;">
+          <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
+            <span style="font-size: 11px; color: var(--text-muted); display: block;">Commandes traitées</span>
+            <strong style="color: #60a5fa; font-size: 14px;">${cmds}</strong>
+          </div>
+          <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px;">
+            <span style="font-size: 11px; color: var(--text-muted); display: block;">Tokens économisés</span>
+            <strong style="color: #34d399; font-size: 14px;">${saved.toLocaleString()} <span style="font-size: 11px; font-weight: normal; color: var(--text-secondary);">(~${pct}%)</span></strong>
+          </div>
+        </div>
+        <p style="margin: 8px 0 0 0; font-size: 11.5px; color: var(--text-muted);">
+          ⚡ Filtre proxy transparent en Rust (&lt; 10 ms). Intercepte et compresse automatiquement les commandes <code>git</code>, <code>pytest</code>, <code>docker</code>, et lectures de fichiers.
+        </p>
+      `;
+    } catch (e) {
+      console.debug('Failed to load RTK status:', e);
+    }
+  }
+
   function updateQuotaUi() {
     const q = state.activeQuota;
     if (!q || !el.topbarQuotaBadge) return;
@@ -1378,7 +1427,7 @@
 
     // Check for quota / usage command: open dedicated quota view without posting to chat
     const cleanCmd = prompt.trim().toLowerCase();
-    if (cleanCmd === '/usage' || cleanCmd === 'à/usage' || cleanCmd === '/quota' || cleanCmd === '/stats' || cleanCmd === '/tokens') {
+    if (cleanCmd === '/usage' || cleanCmd === 'à/usage' || cleanCmd === '/quota' || cleanCmd === '/stats' || cleanCmd === '/tokens' || cleanCmd === '/rtk' || cleanCmd === '/gain') {
       el.promptInput.value = '';
       el.promptInput.style.height = 'auto';
       openSettings('tab-model');
@@ -2175,6 +2224,7 @@
     refreshAuthStatus();
     loadMcpServers();
     loadProviderQuotas();
+    loadRtkStatus();
 
     el.settingsModal.classList.add('active');
   }
@@ -2870,6 +2920,7 @@
     updateModelBadges();
     loadProviders();
     loadProviderQuotas();
+    loadRtkStatus();
 
     try {
       const serverSettings = await apiCall('/api/settings');

@@ -52,10 +52,71 @@ if [ ! -L /root/.codex ]; then
     ln -sfn /data/.codex /root/.codex
 fi
 
-# Ensure GEMINI.md, AGENTS.md and skills are available in both /app and ~/.gemini/antigravity-cli/skills
+# Persistent directory for RTK (Rust Token Killer) history database & configuration
+mkdir -p /data/.local/share/rtk
+mkdir -p /data/.config/rtk
+if [ ! -L /root/.local/share/rtk ]; then
+    mkdir -p /root/.local/share
+    if [ -d /root/.local/share/rtk ]; then
+        cp -rn /root/.local/share/rtk/* /data/.local/share/rtk/ 2>/dev/null || true
+        rm -rf /root/.local/share/rtk
+    fi
+    ln -sfn /data/.local/share/rtk /root/.local/share/rtk
+fi
+if [ ! -L /root/.config/rtk ]; then
+    mkdir -p /root/.config
+    if [ -d /root/.config/rtk ]; then
+        cp -rn /root/.config/rtk/* /data/.config/rtk/ 2>/dev/null || true
+        rm -rf /root/.config/rtk
+    fi
+    ln -sfn /data/.config/rtk /root/.config/rtk
+fi
+
+# Initialize RTK (Rust Token Killer) hooks, plugins and strict local privacy
+if command -v rtk >/dev/null 2>&1; then
+    echo "[Chassitant] Configuration de RTK (Rust Token Killer)..."
+    rtk telemetry disable 2>/dev/null || true
+    # Register Codex PreToolUse hook
+    mkdir -p /data/.codex
+    cat << 'EOF' > /data/.codex/hooks.json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "rtk hook codex"
+          }
+        ]
+      }
+    ]
+  }
+}
+EOF
+    # Interactive bash aliases for web terminal
+    mkdir -p /root
+    touch /root/.bashrc
+    if ! grep -q "alias git='rtk git'" /root/.bashrc 2>/dev/null; then
+        echo "alias git='rtk git'" >> /root/.bashrc
+        echo "alias pytest='rtk pytest'" >> /root/.bashrc
+        echo "alias docker='rtk docker'" >> /root/.bashrc
+    fi
+fi
+
+# Ensure GEMINI.md, AGENTS.md, RTK.md, plugins and skills are available in both /app and ~/.gemini/antigravity-cli/
 mkdir -p /root/.gemini/antigravity-cli/skills
+mkdir -p /root/.gemini/antigravity-cli/plugins
 if [ -d /app/.agents/skills ]; then
     cp -rn /app/.agents/skills/* /root/.gemini/antigravity-cli/skills/ 2>/dev/null || true
+fi
+if [ -d /app/.agents/plugins ]; then
+    cp -rn /app/.agents/plugins/* /root/.gemini/antigravity-cli/plugins/ 2>/dev/null || true
+fi
+if [ -f /app/RTK.md ]; then
+    cp -f /app/RTK.md /root/RTK.md 2>/dev/null || true
+    cp -f /app/RTK.md /data/RTK.md 2>/dev/null || true
 fi
 if [ -f /app/GEMINI.md ]; then
     cp -f /app/GEMINI.md /root/GEMINI.md 2>/dev/null || true

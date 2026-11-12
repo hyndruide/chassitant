@@ -1,5 +1,7 @@
 # Directives Chassitant pour Home Assistant
 
+@RTK.md
+
 Ce système est connecté à une instance Home Assistant via le serveur MCP `homeassistant` (`ha-mcp`).
 
 ## RÈGLES CRITIQUES D'OPTIMISATION ET D'ACCÈS AUX DONNÉES

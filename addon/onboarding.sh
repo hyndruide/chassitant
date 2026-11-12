@@ -57,6 +57,11 @@ fi
 
 echo ""
 echo "----------------------------------------------------------------"
+if command -v rtk >/dev/null 2>&1; then
+    echo "🛡️ RTK (Rust Token Killer) : Actif (compression 60-90% du terminal)"
+    echo "💡 Pour voir vos économies de tokens : tapez 'rtk gain'"
+    echo "----------------------------------------------------------------"
+fi
 echo "Session prête. Vous êtes dans le terminal interactif."
 echo "Commandes de connexion disponibles à tout moment :"
 echo "  - 'codex login --device-auth' : connecter votre compte ChatGPT (OpenAI)"

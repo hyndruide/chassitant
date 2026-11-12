@@ -11,7 +11,9 @@ import logging
 import mimetypes
 import os
 import secrets
+import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -382,7 +384,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.8.18",
+                    "version": "1.8.19",
                     "active_provider": active_prov.provider_id,
                     "provider_name": active_prov.display_name,
                     "provider_authenticated": auth_ok,
@@ -395,6 +397,69 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                     "models_count": len(models),
                 },
             )
+            return
+
+        # RTK (Rust Token Killer) status endpoint
+        if path == "/api/rtk/status":
+            if not self.check_authorization():
+                return
+            rtk_bin = shutil.which("rtk")
+            if not rtk_bin:
+                for cand in [
+                    Path("/usr/local/bin/rtk"),
+                    Path("/usr/bin/rtk"),
+                    Path.home() / ".local" / "bin" / "rtk",
+                ]:
+                    if cand.is_file():
+                        rtk_bin = str(cand)
+                        break
+
+            if not rtk_bin:
+                self.send_json(
+                    HTTPStatus.OK,
+                    {
+                        "success": True,
+                        "installed": False,
+                        "message": "Le binaire 'rtk' n'est pas installé sur ce système.",
+                    },
+                )
+                return
+
+            try:
+                res = subprocess.run(
+                    [rtk_bin, "gain", "--format", "json"],
+                    capture_output=True,
+                    text=True,
+                    timeout=4,
+                    check=False,
+                )
+                gain_data = json.loads(res.stdout) if res.stdout.strip() else {}
+                summary = gain_data.get("summary", {})
+                self.send_json(
+                    HTTPStatus.OK,
+                    {
+                        "success": True,
+                        "installed": True,
+                        "binary_path": rtk_bin,
+                        "summary": summary,
+                    },
+                )
+            except Exception as ex:
+                logger.warning("Error querying rtk gain: %s", ex)
+                self.send_json(
+                    HTTPStatus.OK,
+                    {
+                        "success": True,
+                        "installed": True,
+                        "binary_path": rtk_bin,
+                        "summary": {
+                            "total_commands": 0,
+                            "total_saved": 0,
+                            "avg_savings_pct": 0.0,
+                        },
+                        "error": str(ex),
+                    },
+                )
             return
 
         # Providers endpoint

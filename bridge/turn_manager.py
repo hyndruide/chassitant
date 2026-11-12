@@ -10,8 +10,11 @@ from __future__ import annotations
 import json
 import logging
 import queue
+import shutil
+import subprocess
 import threading
 import time
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("chassitant.turn_manager")
@@ -198,6 +201,26 @@ def build_usage_report(
     quota_section = "\n".join(quota_lines)
     thinking_detail = f"\n  - **Réflexion (Thinking)** : `{thinking_tokens:,}` tokens" if thinking_tokens > 0 else ""
 
+    # Check RTK (Rust Token Killer) metrics if available
+    rtk_section = ""
+    try:
+        rtk_bin = shutil.which("rtk")
+        if not rtk_bin:
+            for cand in [Path("/usr/local/bin/rtk"), Path("/usr/bin/rtk"), Path.home() / ".local" / "bin" / "rtk"]:
+                if cand.is_file():
+                    rtk_bin = str(cand)
+                    break
+        if rtk_bin:
+            res = subprocess.run([rtk_bin, "gain", "--format", "json"], capture_output=True, text=True, timeout=2, check=False)
+            if res.returncode == 0 and res.stdout.strip():
+                gdata = json.loads(res.stdout).get("summary", {})
+                cmds = gdata.get("total_commands", 0)
+                saved = gdata.get("total_saved", 0)
+                pct = gdata.get("avg_savings_pct", 0.0)
+                rtk_section = f"""\n#### 🛡️ Compression Terminal & Shell (RTK)\n- **Statut** : **Actif** (proxy transparent)\n- **Commandes traitées** : `{cmds}`\n- **Tokens économisés** : `{saved:,}` tokens (~{pct:.1f}% de réduction)\n"""
+    except Exception as ex:
+        logger.debug("Could not fetch rtk metrics for report: %s", ex)
+
     report_markdown = f"""### 📊 Rapport de Consommation & Quotas (`/usage`)
 
 #### 🧠 Mémoire de Contexte (Discussion active)
@@ -213,7 +236,7 @@ def build_usage_report(
 - **Formule / Plan** : `{plan}`
 - **Compte associé** : `{account}`
 {quota_section}
-
+{rtk_section}
 #### 💬 Statistiques de la Discussion
 - **Messages échangés** : `{msg_count}` message(s)
 - **Cumul tokens consommés** : `{total_conv_tokens:,}` tokens
