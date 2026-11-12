@@ -319,6 +319,14 @@ class TestBridgeServer(unittest.TestCase):
         self.assertIn("--ephemeral", cmd)
         self.assertNotIn("--model", cmd)
 
+    def test_codex_quota_urls(self) -> None:
+        """Verify CodexProvider returns updated usage and analytics URLs."""
+        from bridge.providers.codex_provider import CodexProvider
+        provider = CodexProvider(binary_path="/usr/local/bin/codex")
+        quota = provider.get_quota_status()
+        self.assertEqual(quota["quota_url"], "https://chatgpt.com/settings/usage?tab=overview")
+        self.assertEqual(quota["analytics_url"], "https://chatgpt.com/codex/cloud/settings/analytics")
+
     def test_token_usage_normalization(self) -> None:
         """Verify normalization of token metrics and context remaining calculation."""
         from bridge.turn_manager import normalize_token_usage, get_model_context_limit

@@ -1104,8 +1104,9 @@
               <strong style="color: #34d399; font-size: 14px;">${escapeHtml(sem)}</strong>
             </div>
           </div>
-          <div style="font-size: 11.5px; margin-top: 4px;">
-            🔗 Suivre en direct sur votre compte : <a href="${q.quota_url || 'https://chatgpt.com/codex/settings/usage'}" target="_blank" style="color: #60a5fa; text-decoration: underline;">chatgpt.com/codex/settings/usage</a>
+          <div style="font-size: 11.5px; margin-top: 6px; display: flex; flex-direction: column; gap: 4px;">
+            <div>🔗 Suivi de l'utilisation : <a href="${q.quota_url || 'https://chatgpt.com/settings/usage?tab=overview'}" target="_blank" style="color: #60a5fa; text-decoration: underline;">chatgpt.com/settings/usage</a></div>
+            <div>📈 Statistiques détaillées Cloud : <a href="${q.analytics_url || 'https://chatgpt.com/codex/cloud/settings/analytics'}" target="_blank" style="color: #60a5fa; text-decoration: underline;">chatgpt.com/codex/cloud/settings/analytics</a></div>
           </div>
         `;
       } else if (pid === 'agy') {

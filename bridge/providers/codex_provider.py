@@ -131,6 +131,8 @@ class CodexProvider(BaseProvider):
                 "plan": "Non connecté",
                 "is_authenticated": False,
                 "summary": "Non connecté (ouvrir le terminal pour se connecter)",
+                "quota_url": "https://chatgpt.com/settings/usage?tab=overview",
+                "analytics_url": "https://chatgpt.com/codex/cloud/settings/analytics",
             }
 
         codex_home = Path("/data/.codex") if os.path.isdir("/data/.codex") else Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex")))
@@ -185,7 +187,8 @@ class CodexProvider(BaseProvider):
             "reset_5h": reset_5h,
             "reset_week": reset_week,
             "summary": summary,
-            "quota_url": "https://chatgpt.com/codex/settings/usage",
+            "quota_url": "https://chatgpt.com/settings/usage?tab=overview",
+            "analytics_url": "https://chatgpt.com/codex/cloud/settings/analytics",
             "note": "OpenAI applique 2 quotas temporels distincts : sur 5 heures glissantes et sur la semaine.",
         }
 

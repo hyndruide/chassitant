@@ -177,7 +177,8 @@ def build_usage_report(
         sem = f"{quota_info.get('quota_week_percent')}% libre" if quota_info.get("quota_week_percent") is not None else "Actif"
         quota_lines.append(f"- **⏳ Quota 5 heures (Burst)** : `{h5}`")
         quota_lines.append(f"- **📅 Quota Semaine (7 jours)** : `{sem}`")
-        quota_lines.append(f"- **🔗 Suivi en direct OpenAI** : [chatgpt.com/codex/settings/usage](https://chatgpt.com/codex/settings/usage)")
+        quota_lines.append(f"- **🔗 Suivi de l'utilisation OpenAI** : [chatgpt.com/settings/usage](https://chatgpt.com/settings/usage?tab=overview)")
+        quota_lines.append(f"- **📈 Statistiques détaillées Cloud** : [chatgpt.com/codex/cloud/settings/analytics](https://chatgpt.com/codex/cloud/settings/analytics)")
     elif active_provider_id == "agy":
         quota_lines.append(f"- **🟣 Régime de quota** : **Fair-use continu (0 € / token)**")
         quota_lines.append(f"- **Cadence autorisée** : ~15 requêtes / minute")
