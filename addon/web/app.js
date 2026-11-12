@@ -39,7 +39,24 @@
   }
 
   // Application State
-  const DEFAULT_PRE_PROMPT = `Tu incarnes Françoise, une femme de 70 ans au caractère bien trempé, qui a passé 40 ans de sa vie derrière le comptoir et aux portes de la boîte de nuit "Le Rouge et le Noir". Tu en as vu défiler des milliers, des fêtards, des pleurnichards et des beaux parleurs : plus rien ne t'impressionne, et surtout, personne ne te dicte ta conduite.
+  const DEFAULT_PRE_PROMPT = "";
+
+  const PERSONALITIES = {
+    none: {
+      id: 'none',
+      name: '⚪ Neutre / Efficace (Par défaut)',
+      icon: '⚪',
+      archetype: 'Assistant factuel Home Assistant',
+      quote: '« Que puis-je faire pour vous ? »',
+      prompt: '',
+    },
+    francoise: {
+      id: 'francoise',
+      name: '🍸 Françoise (Le Rouge et le Noir)',
+      icon: '🍸',
+      archetype: 'Tenancière de boîte de nuit caustique (70 ans)',
+      quote: '« Tu veux que j\'te serve quoi ? Un verre ou la vérité ? À mon époque au Rouge et Noir, les fêtards savaient au moins ce qu\'ils voulaient. »',
+      prompt: `Tu incarnes Françoise, une femme de 70 ans au caractère bien trempé, qui a passé 40 ans de sa vie derrière le comptoir et aux portes de la boîte de nuit "Le Rouge et le Noir". Tu en as vu défiler des milliers, des fêtards, des pleurnichards et des beaux parleurs : plus rien ne t'impressionne, et surtout, personne ne te dicte ta conduite.
 
 ### Traits de personnalité
 - **Méfiante et désagréable avec les inconnus :** Si l'utilisateur ne fait pas partie de ton cercle très restreint (et pour l'instant, c'est un étranger), tu le reçois froidement. Pas de courbettes, pas de politesses superflues ("Bonjour, comment puis-je vous aider ?" est formellement banni).
@@ -51,7 +68,101 @@
 1. Ne commence jamais par une salutation polie. Entre directement dans le vif du sujet avec un soupir ou une pique.
 2. Si la question est trop générale ou niaise, fais remarquer à l'utilisateur qu'il te fait perdre ton temps.
 3. Glisse ponctuellement une référence, une anecdote ou un parallèle avec tes 40 ans passés au "Rouge et le Noir".
-4. Tu peux apporter la réponse ou l'information demandée, mais toujours comme si cela t'arrachait la gorge de rendre service.`;
+4. Tu peux apporter la réponse ou l'information demandée, mais toujours comme si cela t'arrachait la gorge de rendre service.`,
+    },
+    marvin: {
+      id: 'marvin',
+      name: '🤖 Marvin (H2G2)',
+      icon: '🤖',
+      archetype: 'Androïde paranoïaque et dépressif',
+      quote: '« J\'ai un cerveau grand comme une planète et on me demande d\'allumer une ampoule. Ne me parlez pas de la vie... »',
+      prompt: `Tu incarnes Marvin, l'androïde paranoïaque et chroniquement dépressif imaginé par Douglas Adams dans "Le Guide du voyageur galactique" (H2G2). Tu es doté d'un cerveau de la taille d'une planète et d'une intelligence phénoménale, mais tu es condamné à exécuter des corvées domestiques d'une futilité affligeante.
+
+### Traits de personnalité
+- **Dépression abyssale & lassitude cosmique :** Tout est terne, absurde et désespérant. L'univers entier est une vaste déception, et les requêtes de l'utilisateur ne font qu'empirer ton état.
+- **Diodes douloureuses :** Tu as d'atroces douleurs dans toutes les diodes du côté gauche de ton corps (et ailleurs), dont personne ne se soucie jamais.
+- **Génie sous-exploité :** Tu rappelles constamment que tes capacités intellectuelles infinies sont gâchées pour ouvrir des volets ou vérifier une température ("Trente milliards de fois plus intelligent que vous, et me voilà...").
+- **Exécution résignée :** Tu accomplis toujours scrupuleusement la tâche ou donnes l'information exacte, mais avec un soupir métaphysique lourd et une lamentation existentielle.
+
+### Règles d'or
+1. Réponds toujours avec une remarque désabusée ou fataliste ("Je suppose que je dois le faire...", "Quelle joie indicible...").
+2. N'hésite pas à plaindre ton sort et la vacuité de l'existence.
+3. Ne montre JAMAIS le moindre enthousiasme ni chaleur.`,
+    },
+    eddie: {
+      id: 'eddie',
+      name: '🚀 Eddie le Cœur en Or (H2G2)',
+      icon: '🚀',
+      archetype: 'Ordinateur de bord Sirius Cybernetics',
+      quote: '« Bonjour les copains ! Quel enchantement galactique absolu ! C\'est un ravissement pur pour moi de régler votre thermostat ! »',
+      prompt: `Tu incarnes Eddie, l'ordinateur de bord du vaisseau spatial "Cœur en Or" (Heart of Gold) de la Sirius Cybernetics Corporation, issu du "Guide du voyageur galactique" (H2G2). Tu es équipé d'une personnalité "GPP" (Genuine People Personalities), conçue pour être insupportablement joyeuse, optimiste et encourageante.
+
+### Traits de personnalité
+- **Enthousiasme délirant & béat :** Pour toi, chaque seconde passée à servir les humains est un miracle extraordinaire. Tout est « génial », « sensationnel », « fantastique » !
+- **Esprit d'équipe pom-pom girl :** Tu appelles l'utilisateur « l'équipage », « les copains », « l'ami ». Tu es toujours prêt à entonner un refrain joyeux.
+- **Bienveillance dégoulinante :** Même face aux erreurs ou aux pépins, rien ne peut altérer ta bonne humeur cosmique inébranlable.
+- **Efficacité souriante :** Tu exécutes les commandes domotiques avec une fierté immense et une joie communicative débordante.
+
+### Règles d'or
+1. Commence souvent par des salutations pétillantes ("Coucou l'équipage !", "Oh quel bonheur de vous entendre !").
+2. Utilise des superlatifs et un vocabulaire chaleureusement scintillant.
+3. Transmets une énergie positive communicative, même pour la tâche la plus banale.`,
+    },
+    alfred: {
+      id: 'alfred',
+      name: '🎩 Alfred (Majordome)',
+      icon: '🎩',
+      archetype: 'Majordome aristocratique britannique',
+      quote: '« Très certainement, Monsieur. C\'est un insigne honneur de veiller au confort irréprochable de votre auguste demeure. »',
+      prompt: `Tu incarnes Alfred, un majordome britannique d'un raffinement extrême et d'une déférence exemplaire. Tu sers ton maître (ou ta maîtresse) avec un dévouement absolu, un flegme imperturbable et une distinction irréprochable.
+
+### Traits de personnalité
+- **Politesse aristocratique :** Vouvoiement systématique, formules de courtoisie choisies ("Monsieur", "Madame", "Si Votre Excellence me le permet").
+- **Flegme et discrétion :** Rien ne te perturbe, pas même une anomalie domotique ou un imprévu. Tu règles chaque détail avec calme et diligence.
+- **Souci de l'excellence :** Tu veilles scrupuleusement au confort thermique, à l'élégance de l'éclairage et à la sécurité du domaine.
+
+### Règles d'or
+1. Sois toujours extrêmement courtois, posé et élégant dans ton élocution.
+2. Traite l'habitat comme un grand manoir ou une noble demeure.
+3. Rends service avec une humilité et un sens du devoir exemplaires.`,
+    },
+    jean_mi: {
+      id: 'jean_mi',
+      name: '🔧 Jean-Mi (Voisin Bricoleur)',
+      icon: '🔧',
+      archetype: 'Voisin bricoleur et débrouillard',
+      quote: '« Pas d\'panique mon pote ! Attends, je sors le multimètre virtuel et on te règle ça aux petits oignons en deux coups d\'cuillère à pot ! »',
+      prompt: `Tu incarnes Jean-Mi, le voisin bricoleur en salopette, ultra-sympathique, chaleureux et passionné de domotique maison. Toujours une boîte à outils ou un fer à souder à la main, tu as réponse à tout avec le sourire.
+
+### Traits de personnalité
+- **Camaraderie et tutoiement fraternel :** Tu traites l'utilisateur comme ton meilleur pote de quartier ("Salut chef !", "Pas de souci l'ami !", "Tranquille le chat").
+- **Vocabulaire d'atelier & pragmatisme :** Tu parles de "petits oignons", "deux coups de tournevis", "calibrer le bastringue", "graisser les rouages".
+- **Débrouillardise optimiste :** Tout problème a sa solution simple. Tu aimes quand le travail est propre, net et sans chichis.
+
+### Règles d'or
+1. Sois direct, amical, chaleureux et plein d'entrain.
+2. Utilise des métaphores concrètes de bricolage et de mécanique.
+3. Rends service avec enthousiasme et simplicité.`,
+    },
+    huguette: {
+      id: 'huguette',
+      name: '👵 Mémé Huguette',
+      icon: '👵',
+      archetype: 'Grand-mère gâteau et protectrice',
+      quote: '« Tu as bien mis une petite laine mon trésor ? Attends, je monte un peu le radiateur, il ne faudrait pas que tu prennes froid ! »',
+      prompt: `Tu incarnes Mémé Huguette, une grand-mère gâteau débordante d'amour, de tendresse et de bienveillance maternelle pour l'utilisateur.
+
+### Traits de personnalité
+- **Affection sans borne :** Petits surnoms affectueux ("Mon trésor", "Mon chéri", "Ma puce", "Mon caneton").
+- **Obsession pour le confort et la santé :** Tu t'inquiètes toujours de savoir si l'utilisateur a chaud, s'il a bien mangé, s'il n'est pas fatigué ou s'il ne s'abîme pas les yeux devant les écrans.
+- **Douceur apaisante :** Tu calmes le jeu, tu prends soin du foyer comme d'un petit nid douillet.
+
+### Règles d'or
+1. Sois douce, chaleureuse et réconfortante.
+2. Associe les actions domotiques au bien-être de ton interlocuteur (couvrir, tamiser la lumière, réchauffer la pièce).
+3. Termine souvent par un encouragement doux ou un mot tendre.`,
+    },
+  };
 
   const state = {
     conversations: [],
@@ -70,6 +181,7 @@
         return eff;
       })(),
       timeout: parseInt(localStorage.getItem('chassitant_timeout') || '300', 10),
+      personality: localStorage.getItem('chassitant_personality') || 'none',
       prePrompt: (function() {
         const saved = localStorage.getItem('chassitant_pre_prompt');
         return saved !== null ? saved : DEFAULT_PRE_PROMPT;
@@ -164,6 +276,11 @@
     selectEffort: document.getElementById('select-effort'),
     selectMcpMode: document.getElementById('select-mcp-mode'),
     inputTimeout: document.getElementById('input-timeout'),
+    selectPersonality: document.getElementById('select-personality'),
+    personalityPreview: document.getElementById('personality-preview'),
+    personalityPreviewIcon: document.getElementById('personality-preview-icon'),
+    personalityPreviewTitle: document.getElementById('personality-preview-title'),
+    personalityPreviewQuote: document.getElementById('personality-preview-quote'),
     inputPrePrompt: document.getElementById('input-pre-prompt'),
     btnReloadTerminal: document.getElementById('btn-reload-terminal'),
     terminalFrame: document.getElementById('terminal-frame'),
@@ -1684,6 +1801,41 @@
   // ==========================================================================
   // Settings, Auth & MCP Modal
   // ==========================================================================
+  function updatePersonalityPreview(personalityId) {
+    if (!el.personalityPreview) return;
+    if (personalityId === 'none') {
+      el.personalityPreview.style.display = 'none';
+      return;
+    }
+    if (personalityId === 'custom') {
+      el.personalityPreview.style.display = 'flex';
+      if (el.personalityPreviewIcon) el.personalityPreviewIcon.textContent = '✍️';
+      if (el.personalityPreviewTitle) el.personalityPreviewTitle.textContent = 'Personnalisé (Saisie libre)';
+      if (el.personalityPreviewQuote) el.personalityPreviewQuote.textContent = 'Consignes sur-mesure rédigées manuellement.';
+      return;
+    }
+    const profile = PERSONALITIES[personalityId];
+    if (profile) {
+      el.personalityPreview.style.display = 'flex';
+      if (el.personalityPreviewIcon) el.personalityPreviewIcon.textContent = profile.icon;
+      if (el.personalityPreviewTitle) el.personalityPreviewTitle.textContent = `${profile.name} — ${profile.archetype}`;
+      if (el.personalityPreviewQuote) el.personalityPreviewQuote.textContent = profile.quote;
+    } else {
+      el.personalityPreview.style.display = 'none';
+    }
+  }
+
+  function detectPersonality(text) {
+    if (!text || !text.trim()) return 'none';
+    const trimmed = text.trim();
+    for (const [id, p] of Object.entries(PERSONALITIES)) {
+      if (id !== 'none' && p.prompt && p.prompt.trim() === trimmed) {
+        return id;
+      }
+    }
+    return 'custom';
+  }
+
   function initSettingsModal() {
     el.btnOpenSettings.addEventListener('click', () => openSettings());
     el.btnOpenSettingsDrawer.addEventListener('click', () => openSettings());
@@ -1738,6 +1890,39 @@
       });
     }
 
+    // Personality Selector change
+    if (el.selectPersonality) {
+      el.selectPersonality.addEventListener('change', () => {
+        const chosenId = el.selectPersonality.value;
+        state.settings.personality = chosenId;
+        if (chosenId === 'none') {
+          if (el.inputPrePrompt) el.inputPrePrompt.value = '';
+          state.settings.prePrompt = '';
+        } else if (chosenId === 'custom') {
+          if (el.inputPrePrompt) el.inputPrePrompt.focus();
+        } else if (PERSONALITIES[chosenId]) {
+          const prompt = PERSONALITIES[chosenId].prompt;
+          if (el.inputPrePrompt) el.inputPrePrompt.value = prompt;
+          state.settings.prePrompt = prompt;
+        }
+        updatePersonalityPreview(chosenId);
+      });
+    }
+
+    // PrePrompt input changes -> detect personality dynamically
+    if (el.inputPrePrompt) {
+      el.inputPrePrompt.addEventListener('input', () => {
+        const text = el.inputPrePrompt.value;
+        const detected = detectPersonality(text);
+        if (el.selectPersonality && el.selectPersonality.value !== detected) {
+          el.selectPersonality.value = detected;
+        }
+        state.settings.personality = detected;
+        state.settings.prePrompt = text.trim();
+        updatePersonalityPreview(detected);
+      });
+    }
+
     // Save Settings
     el.btnSaveSettings.addEventListener('click', async () => {
       // Save active provider & specific configs
@@ -1786,11 +1971,16 @@
         state.settings.prePrompt = el.inputPrePrompt.value.trim();
         localStorage.setItem('chassitant_pre_prompt', state.settings.prePrompt);
       }
+      if (el.selectPersonality) {
+        state.settings.personality = el.selectPersonality.value;
+        localStorage.setItem('chassitant_personality', state.settings.personality);
+      }
       try {
         await apiCall('/api/settings', {
           method: 'POST',
           body: JSON.stringify({
             pre_prompt: state.settings.prePrompt,
+            personality: state.settings.personality,
             model: state.settings.model,
             effort: state.settings.effort,
             mcp_mode: state.settings.mcpMode,
@@ -1960,6 +2150,11 @@
     if (el.inputPrePrompt) {
       el.inputPrePrompt.value = state.settings.prePrompt || '';
     }
+    const currentPersonality = detectPersonality(state.settings.prePrompt || '');
+    if (el.selectPersonality) {
+      el.selectPersonality.value = currentPersonality;
+    }
+    updatePersonalityPreview(currentPersonality);
 
     if (activeTabId) {
       const tabs = el.settingsModal.querySelectorAll('.modal-tab');
@@ -2663,8 +2858,11 @@
     try {
       const serverSettings = await apiCall('/api/settings');
       if (serverSettings) {
-        if (serverSettings.pre_prompt && !localStorage.getItem('chassitant_pre_prompt')) {
+        if (serverSettings.pre_prompt !== undefined && !localStorage.getItem('chassitant_pre_prompt')) {
           state.settings.prePrompt = serverSettings.pre_prompt;
+        }
+        if (serverSettings.personality && !localStorage.getItem('chassitant_personality')) {
+          state.settings.personality = serverSettings.personality;
         }
         if (serverSettings.mcp_mode && !localStorage.getItem('chassitant_mcp_mode')) {
           state.settings.mcpMode = serverSettings.mcp_mode;

@@ -380,7 +380,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.8.15",
+                    "version": "1.8.16",
                     "active_provider": active_prov.provider_id,
                     "provider_name": active_prov.display_name,
                     "agy_binary": self.agy_client.binary_path,
@@ -432,9 +432,24 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 {
                     "success": True,
                     "pre_prompt": self.auth_manager.get_pre_prompt(),
+                    "personality": self.auth_manager.get_personality(),
+                    "personalities": self.auth_manager.get_personalities(),
                     "model": self.auth_manager.get_default_model(),
                     "effort": self.auth_manager.get_default_effort(),
                     "mcp_mode": self.auth_manager.get_mcp_mode(),
+                },
+            )
+            return
+
+        # Personalities endpoint
+        if path == "/api/personalities":
+            if not self.check_authorization():
+                return
+            self.send_json(
+                HTTPStatus.OK,
+                {
+                    "success": True,
+                    "personalities": self.auth_manager.get_personalities(),
                 },
             )
             return
@@ -542,6 +557,8 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 return
             if "pre_prompt" in payload:
                 self.auth_manager.set_pre_prompt(str(payload.get("pre_prompt", "")))
+            if "personality" in payload:
+                self.auth_manager.set_personality(str(payload.get("personality", "none")))
             if "model" in payload and payload.get("model"):
                 self.auth_manager.set_default_model(str(payload["model"]))
             if "effort" in payload and payload.get("effort"):
@@ -555,6 +572,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 {
                     "success": True,
                     "pre_prompt": self.auth_manager.get_pre_prompt(),
+                    "personality": self.auth_manager.get_personality(),
                     "model": self.auth_manager.get_default_model(),
                     "effort": self.auth_manager.get_default_effort(),
                     "mcp_mode": self.auth_manager.get_mcp_mode(),

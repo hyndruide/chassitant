@@ -50,6 +50,35 @@ class TestAuthManager(unittest.TestCase):
         finally:
             del os.environ["CHASSITANT_API_KEY"]
 
+    def test_default_pre_prompt_is_empty(self) -> None:
+        from bridge.auth_manager import DEFAULT_PRE_PROMPT
+        self.assertEqual(DEFAULT_PRE_PROMPT, "")
+        mgr = AuthManager(config_dir=self.test_dir)
+        self.assertEqual(mgr.get_pre_prompt(), "")
+        self.assertEqual(mgr.get_personality(), "none")
+
+    def test_personalities_catalog(self) -> None:
+        from bridge.auth_manager import get_personalities, PERSONALITIES
+        personalities = get_personalities()
+        p_ids = [p["id"] for p in personalities]
+        self.assertIn("none", p_ids)
+        self.assertIn("francoise", p_ids)
+        self.assertIn("marvin", p_ids)
+        self.assertIn("eddie", p_ids)
+        self.assertIn("alfred", p_ids)
+        self.assertIn("jean_mi", p_ids)
+        self.assertIn("huguette", p_ids)
+
+        marvin = PERSONALITIES["marvin"]
+        self.assertIn("planète", marvin["prompt"])
+        self.assertIn("diodes", marvin["prompt"])
+        self.assertIn("H2G2", marvin["name"])
+
+        eddie = PERSONALITIES["eddie"]
+        self.assertIn("Cœur en Or", eddie["name"])
+        self.assertIn("GPP", eddie["prompt"])
+        self.assertIn("Sirius", eddie["prompt"])
+
 
 class TestBridgeServer(unittest.TestCase):
     """Test suite for Bridge HTTP server endpoints."""
@@ -215,6 +244,53 @@ class TestBridgeServer(unittest.TestCase):
         with self.assertRaises(HTTPError) as ctx:
             request.urlopen(req)
         self.assertEqual(ctx.exception.code, HTTPStatus.BAD_REQUEST)
+
+    def test_personalities_endpoint(self) -> None:
+        """Verify /api/personalities endpoint returns H2G2 and all profiles."""
+        url = f"http://127.0.0.1:{self.port}/api/personalities"
+        req = request.Request(url, headers={"Authorization": f"Bearer {self.token}"})
+        with request.urlopen(req) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data.get("success"))
+            p_ids = [p["id"] for p in data.get("personalities", [])]
+            self.assertIn("none", p_ids)
+            self.assertIn("marvin", p_ids)
+            self.assertIn("eddie", p_ids)
+            self.assertIn("francoise", p_ids)
+            self.assertIn("alfred", p_ids)
+            self.assertIn("jean_mi", p_ids)
+            self.assertIn("huguette", p_ids)
+
+    def test_settings_personality_and_preprompt(self) -> None:
+        """Verify GET and POST /api/settings handles personality and empty pre_prompt."""
+        url = f"http://127.0.0.1:{self.port}/api/settings"
+        # 1. Update settings with Marvin
+        req = request.Request(
+            url,
+            data=json.dumps({"personality": "marvin", "pre_prompt": "Prompt test Marvin"}).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with request.urlopen(req) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(data.get("success"))
+            self.assertEqual(data.get("personality"), "marvin")
+            self.assertEqual(data.get("pre_prompt"), "Prompt test Marvin")
+
+        # 2. Reset to empty pre_prompt and none
+        req_reset = request.Request(
+            url,
+            data=json.dumps({"personality": "none", "pre_prompt": ""}).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with request.urlopen(req_reset) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data.get("personality"), "none")
+            self.assertEqual(data.get("pre_prompt"), "")
 
     def test_codex_provider_command_structure(self) -> None:
         """Verify CodexProvider builds valid command lines matching 'codex exec [OPTIONS] [PROMPT]'."""

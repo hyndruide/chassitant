@@ -1999,3 +1999,44 @@ details.reasoning-details summary:hover {
 details.reasoning-details[open] summary {
   border-bottom: 1px solid var(--border-color);
 }
+
+/* Personality Preview Box */
+.personality-preview-box {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: all var(--transition-fast);
+}
+
+.personality-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.personality-preview-icon {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.personality-preview-title {
+  font-size: 13px;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.personality-preview-quote {
+  font-style: italic;
+  color: var(--accent-color, #a78bfa);
+  font-size: 12px;
+  line-height: 1.4;
+  padding-left: 8px;
+  border-left: 2px solid var(--accent-color, #a78bfa);
+}
+

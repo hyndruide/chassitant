@@ -470,16 +470,38 @@
           </div>
 
           <div class="form-group">
-            <label class="form-label">Pré-prompt / Consignes personnalisées</label>
-            <textarea id="input-pre-prompt" class="form-textarea" rows="4" placeholder="Ex: Réponds toujours de façon concise en français. Tutoyez-moi. Priorise les cartes Lovelace modernes de type tile ou mushroom..."></textarea>
-            <span class="form-help">Ces consignes seront automatiquement transmises à l'IA pour personnaliser son comportement et ses réponses.</span>
+            <label class="form-label">Personnalité & Ton de l'Assistante</label>
+            <select id="select-personality" class="form-select">
+              <option value="none" selected>⚪ Neutre / Efficace (Par défaut — Aucun pré-prompt)</option>
+              <option value="francoise">🍸 Françoise (Tenancière de bar caustique de 70 ans)</option>
+              <option value="marvin">🤖 Marvin (H2G2 — Androïde paranoïaque et dépressif)</option>
+              <option value="eddie">🚀 Eddie le Cœur en Or (H2G2 — Ordinateur de bord surexcité)</option>
+              <option value="alfred">🎩 Alfred (Majordome aristocratique au flegme noble)</option>
+              <option value="jean_mi">🔧 Jean-Mi (Voisin bricoleur chaleureux et débrouillard)</option>
+              <option value="huguette">👵 Mémé Huguette (Grand-mère gâteau douce et protectrice)</option>
+              <option value="custom">✍️ Personnalisé (Saisie manuelle sur-mesure)</option>
+            </select>
+            <div id="personality-preview" class="personality-preview-box" style="display: none;">
+              <div class="personality-preview-header">
+                <span id="personality-preview-icon" class="personality-preview-icon">⚪</span>
+                <strong id="personality-preview-title" class="personality-preview-title">Neutre / Efficace</strong>
+              </div>
+              <div id="personality-preview-quote" class="personality-preview-quote"></div>
+            </div>
+            <span class="form-help">Choisissez un profil préconfiguré ou saisissez vos propres consignes ci-dessous.</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Pré-prompt / Consignes injectées</label>
+            <textarea id="input-pre-prompt" class="form-textarea" rows="4" placeholder="Aucune consigne par défaut (réponses neutres et factuelles). Saisissez vos règles ou sélectionnez une personnalité ci-dessus..."></textarea>
+            <span class="form-help">Ces consignes système sont transmises à chaque requête. La modification manuelle bascule automatiquement en mode personnalisé.</span>
           </div>
         </div>
 
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.8.15</h3>
+            <h3>Françoise v1.8.16</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>
