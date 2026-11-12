@@ -51,21 +51,33 @@ class AgyProvider(BaseProvider):
         import json
         from pathlib import Path
 
-        oauth_file = Path.home() / ".gemini" / "antigravity-cli" / "antigravity-oauth-token"
         account_email = None
         auth_method = "consumer"
+        token_found = False
 
-        if oauth_file.is_file():
-            try:
-                with open(oauth_file, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    account_email = data.get("id_token_email")
-                    auth_method = data.get("auth_method") or "consumer"
-            except Exception:
-                pass
+        token_candidates = [
+            Path.home() / ".gemini" / "antigravity-cli" / "antigravity-oauth-token",
+            Path("/root/.gemini/antigravity-cli/antigravity-oauth-token"),
+            Path("/data/.gemini/antigravity-cli/antigravity-oauth-token"),
+        ]
+        for oauth_file in token_candidates:
+            if oauth_file.is_file():
+                try:
+                    with open(oauth_file, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        account_email = data.get("id_token_email")
+                        auth_method = data.get("auth_method") or "consumer"
+                        tok = data.get("token", {})
+                        if tok.get("refresh_token") or tok.get("access_token"):
+                            token_found = True
+                            break
+                except Exception:
+                    pass
 
         is_auth, _ = self.check_auth(timeout=5)
-        if not is_auth:
+        is_authenticated = token_found or is_auth
+
+        if not is_authenticated:
             return {
                 "provider": "agy",
                 "display_name": self.display_name,
@@ -74,8 +86,8 @@ class AgyProvider(BaseProvider):
                 "summary": "Non connecté à Google (ouvrir Connexion)",
             }
 
-        plan_desc = "Google One AI Premium / Gemini Advanced" if auth_method == "consumer" else f"Google Cloud ({auth_method})"
-        summary = f"{account_email} • Quota Gemini inclus (0 € / token)" if account_email else "Compte Google connecté • Forfait Gemini inclus"
+        plan_desc = "Google One AI Premium (Gemini)" if auth_method == "consumer" else f"Google Cloud ({auth_method})"
+        summary = f"{account_email} • Quota continu (0 € / token)" if account_email else "Compte Google connecté • Forfait Gemini inclus"
 
         return {
             "provider": "agy",
@@ -85,7 +97,7 @@ class AgyProvider(BaseProvider):
             "is_authenticated": True,
             "quota_type": "subscription_included",
             "summary": summary,
-            "note": "Google applique un quota d'utilisation équitable (fair-use) sans facturation au token.",
+            "note": "Google applique une politique d'utilisation équitable (fair-use continu) sans quota horaire ou hebdomadaire décompté au token.",
         }
 
     def process_stream(

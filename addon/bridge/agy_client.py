@@ -27,6 +27,7 @@ class AgyClient:
                 app_dir = str(Path(__file__).resolve().parent.parent)
         self.work_dir = app_dir
         logger.info("Using agy work_dir at: %s", self.work_dir)
+        self._cached_models: Optional[List[Dict[str, str]]] = None
 
     @classmethod
     def find_binary(cls) -> Optional[str]:
@@ -73,6 +74,26 @@ class AgyClient:
         if not self.is_installed():
             return False, "Le binaire agy n'a pas été trouvé sur le système."
 
+        # 1. Fast path: check local OAuth token file directly (avoids costly subprocess timeouts)
+        token_candidates = [
+            Path.home() / ".gemini" / "antigravity-cli" / "antigravity-oauth-token",
+            Path("/root/.gemini/antigravity-cli/antigravity-oauth-token"),
+            Path("/data/.gemini/antigravity-cli/antigravity-oauth-token"),
+        ]
+        for p in token_candidates:
+            if p.is_file():
+                try:
+                    with open(p, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                    tok = data.get("token", {})
+                    if tok.get("refresh_token") or tok.get("access_token"):
+                        email = data.get("id_token_email")
+                        msg = f"Authentification active ({email})" if email else "Authentification active."
+                        return True, msg
+                except Exception:
+                    pass
+
+        # 2. Fallback check via subprocess ping
         cmd = [
             self.binary_path,
             "-p",
@@ -144,6 +165,9 @@ class AgyClient:
 
     def list_models(self) -> List[Dict[str, str]]:
         """List available models from agy."""
+        if self._cached_models:
+            return self._cached_models
+
         if not self.is_installed():
             return []
 
@@ -158,13 +182,16 @@ class AgyClient:
             models = []
             for line in res.stdout.splitlines():
                 line = line.strip()
-                if not line or line.startswith("Fetching"):
+                if not line or line.startswith("Fetching") or "⠋" in line or "⠙" in line or "⠹" in line:
                     continue
-                parts = line.split("\t")
+                parts = line.split("\t") if "\t" in line else line.split("  ")
+                parts = [p.strip() for p in parts if p.strip()]
                 if len(parts) >= 2:
-                    models.append({"id": parts[0].strip(), "name": parts[1].strip()})
+                    models.append({"id": parts[0], "name": parts[1]})
                 elif len(parts) == 1:
-                    models.append({"id": parts[0].strip(), "name": parts[0].strip()})
+                    models.append({"id": parts[0], "name": parts[0]})
+            if models:
+                self._cached_models = models
             return models
         except Exception as err:
             logger.warning("Failed to list models: %s", err)

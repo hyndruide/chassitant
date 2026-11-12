@@ -899,7 +899,7 @@
       }
     } else if (pid === 'agy') {
       icon = '🟣';
-      label = 'Gemini: Inclus';
+      label = q.is_authenticated ? 'Gemini: Inclus' : 'Gemini: Déconnecté';
     } else if (pid === 'groq') {
       icon = '⚡';
       label = 'Groq: Gratuit';
@@ -920,8 +920,16 @@
     if (el.providerQuotaCard && el.providerQuotaContent) {
       if (el.providerQuotaIcon) el.providerQuotaIcon.textContent = icon;
       if (el.providerQuotaBadge) {
-        el.providerQuotaBadge.textContent = q.is_authenticated ? 'Connecté' : 'Vérifié';
-        el.providerQuotaBadge.className = q.is_authenticated ? 'auth-status-tag ok' : 'auth-status-tag warning';
+        el.providerQuotaBadge.textContent = q.is_authenticated ? 'Connecté' : 'Non connecté';
+        el.providerQuotaBadge.className = q.is_authenticated ? 'auth-status-tag ok' : 'auth-status-tag danger';
+      }
+
+      if (!q.is_authenticated) {
+        el.providerQuotaContent.innerHTML = `
+          <div><strong>Plan :</strong> Non connecté</div>
+          <div style="margin-top: 4px; color: var(--text-muted);">${escapeHtml(q.summary || 'Veuillez vous connecter pour activer ce fournisseur.')}</div>
+        `;
+        return;
       }
 
       let extraHtml = '';
@@ -948,7 +956,7 @@
           <div style="background: rgba(0,0,0,0.25); padding: 8px; border-radius: 6px; margin: 8px 0;">
             <span style="font-size: 11px; color: var(--text-muted); display: block;">Compte Google actif</span>
             <strong style="color: #a78bfa; font-size: 13px;">${escapeHtml(q.account || 'Connecté')}</strong>
-            <p style="margin: 4px 0 0 0; font-size: 11px; color: var(--text-secondary);">Accès illimité aux modèles Gemini 2.5 Flash, Gemini 2.5 Pro et Claude selon votre quota Google.</p>
+            <p style="margin: 4px 0 0 0; font-size: 11px; color: var(--text-secondary);">Accès illimité aux modèles Gemini et Claude selon votre quota Google (politique fair-use, sans décompte horaire 5h/semaine).</p>
           </div>
         `;
       } else if (pid === 'openrouter') {
