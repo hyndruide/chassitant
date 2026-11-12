@@ -10,9 +10,11 @@ import json
 import logging
 import mimetypes
 import os
+import secrets
 import socket
 import sys
 import threading
+import time
 import urllib.error
 import urllib.request
 from http import HTTPStatus
@@ -380,13 +382,15 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.8.17",
+                    "version": "1.8.18",
                     "active_provider": active_prov.provider_id,
                     "provider_name": active_prov.display_name,
+                    "provider_authenticated": auth_ok,
+                    "provider_status_message": auth_msg,
                     "agy_binary": self.agy_client.binary_path,
                     "agy_installed": self.agy_client.is_installed(),
-                    "agy_authenticated": auth_ok,
-                    "agy_status_message": auth_msg,
+                    "agy_authenticated": auth_ok if active_prov.provider_id == "agy" else self.agy_client.is_installed(),
+                    "agy_status_message": auth_msg if active_prov.provider_id == "agy" else "Inactif",
                     "mcp_servers": mcps,
                     "models_count": len(models),
                 },
@@ -645,23 +649,62 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
 
             if not stream_mode:
                 conv = self.conv_store.get_conversation(conv_id)
-                target_agy_id = conv.get("agy_conversation_id") if conv else None
+                target_session_id = conv.get("agy_conversation_id") if conv else None
                 sync_prompt = prompt
-                if pre_prompt and pre_prompt.strip() and (target_agy_id is None or len(conv.get("messages", [])) <= 1):
+                if pre_prompt and pre_prompt.strip() and (target_session_id is None or len(conv.get("messages", [])) <= 1):
                     sync_prompt = f"[Consignes système / Pré-prompt de l'utilisateur : {pre_prompt.strip()}]\n\n{prompt}"
 
-                logger.info("Executing agy sync turn for conversation %s (agy_id=%s): '%s...'", conv_id, target_agy_id, prompt[:40])
-                result = self.agy_client.process(
-                    prompt=sync_prompt,
-                    conversation_id=target_agy_id,
-                    model=model,
-                    effort=effort,
-                    dangerously_skip_permissions=True,
-                    timeout=timeout,
-                )
-                actual_agy_id = result.get("conversation_id")
-                if actual_agy_id:
-                    self.conv_store.set_agy_conversation_id(conv_id, actual_agy_id)
+                active_prov = self.provider_factory.get_active_provider()
+                logger.info("Executing sync turn for conversation %s with provider %s (session_id=%s): '%s...'", conv_id, active_prov.provider_id, target_session_id, prompt[:40])
+
+                if active_prov.provider_id == "agy":
+                    result = self.agy_client.process(
+                        prompt=sync_prompt,
+                        conversation_id=target_session_id,
+                        model=model,
+                        effort=effort,
+                        dangerously_skip_permissions=True,
+                        timeout=timeout,
+                    )
+                else:
+                    full_resp = ""
+                    last_usage = None
+                    t_start = time.time()
+                    try:
+                        for ev in active_prov.process_stream(
+                            prompt=sync_prompt,
+                            conversation_id=target_session_id,
+                            model=model,
+                            effort=effort,
+                            timeout=timeout,
+                            pre_prompt=pre_prompt,
+                        ):
+                            if ev.get("type") == "text_delta":
+                                full_resp += ev.get("delta", "")
+                            elif ev.get("type") == "done":
+                                if not full_resp and ev.get("response"):
+                                    full_resp = ev.get("response", "")
+                                if ev.get("usage"):
+                                    last_usage = ev.get("usage")
+                        result = {
+                            "success": True,
+                            "status": "SUCCESS",
+                            "response": full_resp,
+                            "duration_seconds": round(time.time() - t_start, 2),
+                            "usage": last_usage or {},
+                        }
+                    except Exception as ex:
+                        logger.error("Sync execution failed on %s: %s", active_prov.provider_id, ex)
+                        result = {
+                            "success": False,
+                            "status": "ERROR",
+                            "error": str(ex),
+                            "response": f"Erreur du fournisseur {active_prov.display_name}: {ex}",
+                        }
+
+                actual_session_id = result.get("conversation_id")
+                if actual_session_id:
+                    self.conv_store.set_agy_conversation_id(conv_id, actual_session_id)
 
                 response_text = result.get("response", "").strip()
                 if not response_text:
@@ -718,19 +761,58 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 return
             conv_id = path.replace("/api/conversations/", "").replace("/compact", "").strip()
             conv = self.conv_store.get_conversation(conv_id)
-            target_agy_id = conv.get("agy_conversation_id") if conv else conv_id
-            if not target_agy_id:
-                self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "Aucune session agy active à compacter"})
+            if not conv:
+                self.send_json(HTTPStatus.NOT_FOUND, {"success": False, "error": "Conversation introuvable"})
                 return
-            logger.info("Triggering context compaction for conversation %s (agy_id=%s)", conv_id, target_agy_id)
-            result = self.agy_client.compact_conversation(conversation_id=target_agy_id, timeout=90)
+
+            active_prov = self.provider_factory.get_active_provider()
+            target_session_id = conv.get("agy_conversation_id")
+
+            if active_prov.provider_id == "agy" and target_session_id:
+                logger.info("Triggering agy context compaction for conversation %s (session_id=%s)", conv_id, target_session_id)
+                result = self.agy_client.compact_conversation(conversation_id=target_session_id, timeout=90)
+                self.send_json(
+                    HTTPStatus.OK,
+                    {
+                        "success": result.get("success", False),
+                        "status": result.get("status"),
+                        "response": result.get("response", "Conversation compactée avec succès."),
+                        "tokens": result.get("usage", {}).get("total_tokens"),
+                    },
+                )
+                return
+
+            # For stateless providers or non-agy sessions, optimize message history directly
+            messages = conv.get("messages", [])
+            if len(messages) <= 2:
+                self.send_json(
+                    HTTPStatus.OK,
+                    {
+                        "success": True,
+                        "status": "ALREADY_COMPACT",
+                        "response": "La discussion est déjà concise (2 messages ou moins).",
+                    },
+                )
+                return
+
+            older_count = len(messages) - 2
+            keep_messages = messages[-2:]
+            summary_msg = {
+                "id": secrets.token_hex(8),
+                "role": "assistant",
+                "text": f"🧹 [Synthèse de l'historique : {older_count} messages archivés pour alléger le contexte]",
+                "timestamp": time.time(),
+                "tokens": 0,
+            }
+            conv["messages"] = [summary_msg] + keep_messages
+            self.conv_store.save()
+            logger.info("Compacted conversation %s (%d messages pruned for provider %s)", conv_id, older_count, active_prov.provider_id)
             self.send_json(
                 HTTPStatus.OK,
                 {
-                    "success": result.get("success", False),
-                    "status": result.get("status"),
-                    "response": result.get("response", "Conversation compactée avec succès."),
-                    "tokens": result.get("usage", {}).get("total_tokens"),
+                    "success": True,
+                    "status": "SUCCESS",
+                    "response": f"Mémoire de la discussion optimisée ({older_count} messages archivés).",
                 },
             )
             return
@@ -847,7 +929,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
-        # 6. Save Gemini API key
+        # 6. Save Provider API key
         if path == "/api/auth/api-key":
             if not self.check_authorization():
                 return
@@ -855,8 +937,11 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
             if not key:
                 self.send_json(HTTPStatus.BAD_REQUEST, {"success": False, "error": "Clé API requise"})
                 return
+            active_prov = self.provider_factory.get_active_provider()
+            if active_prov.provider_id in ("codex", "groq", "openrouter"):
+                self.provider_factory.update_provider_config(active_prov.provider_id, {"api_key": key})
             self.auth_manager.set_gemini_api_key(key)
-            auth_ok, auth_msg = self.agy_client.check_auth(timeout=5)
+            auth_ok, auth_msg = active_prov.check_auth(timeout=5)
             self.send_json(HTTPStatus.OK, {"success": True, "authenticated": auth_ok, "message": auth_msg})
             return
 

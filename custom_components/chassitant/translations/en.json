@@ -25,9 +25,9 @@
     "step": {
       "init": {
         "title": "Chassitant Options",
-        "description": "Configure agent parameters for Antigravity agy.",
+        "description": "Configure AI agent parameters.",
         "data": {
-          "model": "Model (default, gemini-3.8-flash-high, etc.)",
+          "model": "Model (default, gpt-4o, llama-3.3-70b-versatile, gemini-2.5-flash, etc.)",
           "effort": "Reasoning effort",
           "prompt": "System instructions / prompt",
           "timeout": "Timeout (seconds)",

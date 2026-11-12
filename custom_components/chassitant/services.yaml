@@ -1,6 +1,6 @@
 ask:
-  name: Poser une question à agy
-  description: Envoie un prompt à Antigravity CLI (agy) et retourne la réponse générée.
+  name: Poser une question à Françoise
+  description: Envoie un prompt au moteur IA actif de Françoise (Antigravity agy, OpenAI Codex, Groq, OpenRouter, Ollama) et retourne la réponse générée.
   fields:
     prompt:
       name: Prompt
@@ -19,9 +19,9 @@ ask:
         text:
     model:
       name: Modèle
-      description: Modèle à utiliser pour cette requête (optionnel).
+      description: Modèle à utiliser pour cette requête (optionnel, ex: default, gpt-4o, llama-3.3-70b-versatile, gemini-2.5-flash).
       required: false
-      example: "gemini-3.8-flash-high"
+      example: "default"
       selector:
         text:
     effort:

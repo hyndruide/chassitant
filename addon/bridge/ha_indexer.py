@@ -2,7 +2,7 @@
 
 Scans Home Assistant entities via Core REST API, discovers active devices,
 categorizes key domains (weather, climate, temperatures, energy/heating, covers, lights),
-and generates a concise, pre-indexed context file (HA_CONTEXT.md) for Gemini agy.
+and generates a concise, pre-indexed context file (HA_CONTEXT.md) for Home Assistant AI agents.
 This eliminates repetitive ha_search tool calls and cuts card/dashboard creation time to <5s.
 """
 
@@ -190,7 +190,7 @@ class HaIndexer:
         return result
 
     def generate_markdown(self, categorized: Dict[str, Any]) -> str:
-        """Generate high-density, token-efficient HA_CONTEXT.md for Gemini agy."""
+        """Generate high-density, token-efficient HA_CONTEXT.md for Home Assistant AI agents."""
         lines = [
             "# INVENTAIRE HOME ASSISTANT & RACCOURCIS LOVELACE (HA_CONTEXT.md)",
             "",

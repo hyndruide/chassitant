@@ -1039,7 +1039,7 @@
       }
     } else if (pid === 'agy') {
       icon = '🟣';
-      label = q.is_authenticated ? 'Gemini: Inclus' : 'Gemini: Déconnecté';
+      label = q.is_authenticated ? 'Google: Inclus' : 'Google: Déconnecté';
     } else if (pid === 'groq') {
       icon = '⚡';
       label = 'Groq: Gratuit';
@@ -1065,7 +1065,7 @@
     if (el.mobileQuotaIcon) el.mobileQuotaIcon.textContent = icon;
     if (el.mobileQuotaText) {
       let mobileShort = label;
-      if (pid === 'agy') mobileShort = q.is_authenticated ? 'Gemini Inclus' : 'Non connecté';
+      if (pid === 'agy') mobileShort = q.is_authenticated ? 'Google Inclus' : 'Non connecté';
       else if (pid === 'codex') mobileShort = q.quota_5h_percent !== null && q.quota_5h_percent !== undefined ? `5h: ${q.quota_5h_percent}%` : 'ChatGPT';
       el.mobileQuotaText.textContent = mobileShort;
     }
@@ -2535,23 +2535,37 @@
   }
 
   function updateModelBadges() {
+    const defaultByProvider = {
+      agy: 'Gemini 3.8 Flash',
+      codex: 'GPT-4o',
+      groq: 'Llama 3.3 70B',
+      openrouter: 'DeepSeek R1',
+      ollama: 'Llama 3.2',
+    };
+
     let provPrefix = '';
     if (state.activeProviderId === 'codex') provPrefix = '🟢 Codex: ';
     else if (state.activeProviderId === 'groq') provPrefix = '⚡ Groq: ';
     else if (state.activeProviderId === 'openrouter') provPrefix = '🌐 OpenRouter: ';
     else if (state.activeProviderId === 'ollama') provPrefix = '🦙 Ollama: ';
-    else provPrefix = '✨ ';
+    else provPrefix = '🟣 Antigravity: ';
 
     const modelLabels = {
-      'default': state.activeProviderId === 'agy' ? 'Gemini 3.8 Flash' : 'Par défaut',
+      'default': defaultByProvider[state.activeProviderId] || 'Par défaut',
       'gemini-2.5-flash': 'Gemini 2.5 Flash',
       'gemini-2.5-pro': 'Gemini 2.5 Pro',
+      'gemini-2.5-flash-lite': 'Gemini Flash-Lite',
+      'claude-3-5-sonnet': 'Claude 3.5 Sonnet',
+      'claude-3-7-sonnet': 'Claude 3.7 Sonnet',
       'gpt-4o': 'GPT-4o',
       'o3-mini': 'o3-mini',
       'o1': 'o1',
       'llama-3.3-70b-versatile': 'Llama 3.3 70B',
+      'llama-3.1-8b-instant': 'Llama 3.1 8B',
       'deepseek/deepseek-r1:free': 'DeepSeek R1',
+      'meta-llama/llama-3.3-70b-instruct:free': 'Llama 3.3 70B',
       'llama3.2': 'Llama 3.2',
+      'qwen2.5': 'Qwen 2.5',
     };
     const chosen = state.settings.model || 'default';
     const label = modelLabels[chosen] || chosen.split('/').pop();
@@ -2732,7 +2746,8 @@
           alert('Veuillez sélectionner ou démarrer une conversation d\'abord.');
           return;
         }
-        const confirmed = confirm('Voulez-vous compacter cette conversation pour alléger l\'historique et accélérer les réponses de Gemini ?');
+        const provName = (state.providersList || []).find((p) => p.id === state.activeProviderId)?.name || 'l\'IA';
+        const confirmed = confirm(`Voulez-vous compacter cette discussion pour alléger l'historique et accélérer les réponses de ${provName} ?`);
         if (!confirmed) return;
 
         const originalText = el.btnCompactConv.textContent;

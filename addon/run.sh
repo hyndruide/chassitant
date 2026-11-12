@@ -88,7 +88,7 @@ python3 -c "import sys; sys.path.insert(0, '/app'); from bridge.mcp_manager impo
 
 # Run ttyd on port 8097 with base path /terminal for Ingress Google OAuth & CLI
 if [ -x /usr/local/bin/ttyd ]; then
-    echo "[Chassitant] Démarrage du terminal Ingress Google (port 8097)..."
+    echo "[Chassitant] Démarrage du terminal Ingress d'authentification (port 8097)..."
     ttyd -W -p 8097 -b /terminal -t fontSize=14 -t theme='{"background": "#121417"}' /app/onboarding.sh &
 fi
 

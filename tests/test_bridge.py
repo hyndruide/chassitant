@@ -124,6 +124,9 @@ class TestBridgeServer(unittest.TestCase):
             self.assertEqual(resp.status, HTTPStatus.OK)
             data = json.loads(resp.read().decode("utf-8"))
             self.assertTrue(data.get("success"))
+            self.assertEqual(data.get("version"), "1.8.18")
+            self.assertIn("provider_authenticated", data)
+            self.assertIn("active_provider", data)
             self.assertTrue(data.get("agy_installed"))
             self.assertIn("agy_authenticated", data)
 
@@ -291,6 +294,42 @@ class TestBridgeServer(unittest.TestCase):
             data = json.loads(resp.read().decode("utf-8"))
             self.assertEqual(data.get("personality"), "none")
             self.assertEqual(data.get("pre_prompt"), "")
+
+    def test_compact_conversation_stateless(self) -> None:
+        """Verify /api/conversations/{id}/compact works on any conversation without requiring agy session."""
+        # 1. Create conversation
+        url_create = f"http://127.0.0.1:{self.port}/api/conversations"
+        req_create = request.Request(
+            url_create,
+            data=json.dumps({"title": "Test Compact"}).encode("utf-8"),
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with request.urlopen(req_create) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            conv_id = data["conversation"]["id"]
+
+        # Add 4 dummy messages directly in store
+        self.server.conv_store.add_message(conv_id, "user", "Message 1")
+        self.server.conv_store.add_message(conv_id, "assistant", "Response 1")
+        self.server.conv_store.add_message(conv_id, "user", "Message 2")
+        self.server.conv_store.add_message(conv_id, "assistant", "Response 2")
+
+        # 2. Call compact
+        url_compact = f"http://127.0.0.1:{self.port}/api/conversations/{conv_id}/compact"
+        req_compact = request.Request(
+            url_compact,
+            headers={"Authorization": f"Bearer {self.token}"},
+            method="POST",
+        )
+        with request.urlopen(req_compact) as resp:
+            self.assertEqual(resp.status, HTTPStatus.OK)
+            compact_data = json.loads(resp.read().decode("utf-8"))
+            self.assertTrue(compact_data.get("success"))
+
+        # Verify pruned messages (1 summary + 2 recent)
+        conv = self.server.conv_store.get_conversation(conv_id)
+        self.assertEqual(len(conv["messages"]), 3)
 
     def test_codex_provider_command_structure(self) -> None:
         """Verify CodexProvider builds valid command lines matching 'codex exec [OPTIONS] [PROMPT]'."""

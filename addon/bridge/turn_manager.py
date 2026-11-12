@@ -1,6 +1,6 @@
 """Background turn manager for Chassitant conversations.
 
-Ensures LLM / agy turns run independently in background threads so that
+Ensures LLM / AI agent turns run independently in background threads so that
 client disconnections (e.g. navigating to another Home Assistant tab or closing iframe)
 never abort the turn or lose generated responses.
 """

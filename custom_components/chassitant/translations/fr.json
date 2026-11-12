@@ -27,7 +27,7 @@
         "title": "Options de Chassitant",
         "description": "Personnalisez le comportement de l'assistant IA.",
         "data": {
-          "model": "Modèle (default, gemini-3.8-flash-high, claude-sonnet-4-6, etc.)",
+          "model": "Modèle (default, gpt-4o, llama-3.3-70b-versatile, gemini-2.5-flash, etc.)",
           "effort": "Effort de raisonnement",
           "prompt": "Consignes système / Prompt",
           "timeout": "Délai d'attente max (secondes)",
