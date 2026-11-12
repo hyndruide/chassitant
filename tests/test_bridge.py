@@ -316,6 +316,55 @@ class TestBridgeServer(unittest.TestCase):
         finally:
             shutil.rmtree(temp_dir, ignore_errors=True)
 
+    def test_usage_slash_command_report(self) -> None:
+        """Verify build_usage_report produces a complete Markdown report with 0 token cost."""
+        from bridge.turn_manager import build_usage_report
+        from bridge.conversation_store import ConversationStore
+        from bridge.providers.agy_provider import AgyProvider
+        import tempfile
+        import shutil
+
+        temp_dir = Path(tempfile.mkdtemp())
+        try:
+            store = ConversationStore(data_dir=temp_dir)
+            conv = store.create_conversation(title="Test Usage Command")
+            store.add_message(conv["id"], "user", "Bonjour")
+            store.add_message(
+                conv["id"],
+                "assistant",
+                "Bonjour ! Comment puis-je vous aider ?",
+                tokens=450,
+                usage={
+                    "input_tokens": 400,
+                    "output_tokens": 50,
+                    "thinking_tokens": 0,
+                    "total_tokens": 450,
+                    "remaining_tokens": 1_048_126,
+                    "remaining_percent": 99.9,
+                    "context_limit": 1_048_576,
+                    "source": "exact",
+                },
+            )
+
+            provider = AgyProvider(self.agy_cli)
+            report_md, report_usage = build_usage_report(
+                conv_store=store,
+                conv_id=conv["id"],
+                provider=provider,
+                model="gemini-2.5-flash",
+            )
+
+            self.assertIn("### 📊 Rapport de Consommation & Quotas (`/usage`)", report_md)
+            self.assertIn("99.9% libre", report_md)
+            self.assertIn("gemini-2.5-flash", report_md)
+            self.assertIn("Google Antigravity", report_md)
+            self.assertIn("Coût de la commande `/usage`", report_md)
+            self.assertEqual(report_usage["total_tokens"], 0)
+            self.assertEqual(report_usage["context_limit"], 1_048_576)
+            self.assertEqual(report_usage["remaining_percent"], 99.9)
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

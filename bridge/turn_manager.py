@@ -12,7 +12,7 @@ import logging
 import queue
 import threading
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger("chassitant.turn_manager")
 
@@ -111,6 +111,126 @@ def normalize_token_usage(
         "model": effective_model,
         "source": source,
     }
+
+
+def build_usage_report(
+    conv_store: Any,
+    conv_id: str,
+    provider: Any,
+    model: Optional[str] = None,
+) -> Tuple[str, Dict[str, Any]]:
+    """Generate a comprehensive usage and quota report without consuming LLM tokens."""
+    active_provider_id = getattr(provider, "provider_id", "agy")
+    provider_name = getattr(provider, "display_name", active_provider_id)
+    model_name = model or "default"
+    limit = get_model_context_limit(active_provider_id, model_name)
+
+    conv = conv_store.get_conversation(conv_id) if conv_store else None
+    messages = conv.get("messages", []) if conv else []
+
+    # Calculate statistics from conversation
+    msg_count = len(messages)
+    last_assistant_usage = None
+    total_conv_tokens = 0
+
+    for m in messages:
+        if m.get("role") == "assistant":
+            u = m.get("usage")
+            tok = (u.get("total_tokens") if u else None) or m.get("tokens") or 0
+            total_conv_tokens += tok
+            if u:
+                last_assistant_usage = u
+
+    if last_assistant_usage:
+        remaining_percent = last_assistant_usage.get("remaining_percent", 100.0)
+        remaining_tokens = last_assistant_usage.get("remaining_tokens", limit)
+        input_tokens = last_assistant_usage.get("input_tokens", 0)
+        output_tokens = last_assistant_usage.get("output_tokens", 0)
+        thinking_tokens = last_assistant_usage.get("thinking_tokens", 0)
+        total_last = last_assistant_usage.get("total_tokens", input_tokens + output_tokens + thinking_tokens)
+        source_label = "Exact (retourné par l'IA)" if last_assistant_usage.get("source") == "exact" else "Estimation locale"
+    else:
+        remaining_percent = 100.0
+        remaining_tokens = limit
+        input_tokens = 0
+        output_tokens = 0
+        thinking_tokens = 0
+        total_last = 0
+        source_label = "Nouvelle conversation"
+
+    # Fetch provider quota status
+    quota_info = {}
+    if hasattr(provider, "get_quota_status"):
+        try:
+            quota_info = provider.get_quota_status() or {}
+        except Exception as e:
+            logger.warning("Failed to get quota status for report: %s", e)
+
+    plan = quota_info.get("plan") or "Standard"
+    account = quota_info.get("account") or "Connecté"
+    summary = quota_info.get("summary") or ""
+
+    # Specific quota section depending on provider
+    quota_lines = []
+    if active_provider_id == "codex":
+        h5 = f"{quota_info.get('quota_5h_percent')}% libre" if quota_info.get("quota_5h_percent") is not None else "Actif"
+        sem = f"{quota_info.get('quota_week_percent')}% libre" if quota_info.get("quota_week_percent") is not None else "Actif"
+        quota_lines.append(f"- **⏳ Quota 5 heures (Burst)** : `{h5}`")
+        quota_lines.append(f"- **📅 Quota Semaine (7 jours)** : `{sem}`")
+        quota_lines.append(f"- **🔗 Suivi en direct OpenAI** : [chatgpt.com/codex/settings/usage](https://chatgpt.com/codex/settings/usage)")
+    elif active_provider_id == "agy":
+        quota_lines.append(f"- **🟣 Régime de quota** : **Fair-use continu (0 € / token)**")
+        quota_lines.append(f"- **Cadence autorisée** : ~15 requêtes / minute")
+        quota_lines.append(f"- **Accès aux modèles** : Gemini 2.5 Flash, Gemini 2.5 Pro, Claude Sonnet")
+        quota_lines.append(f"- **ℹ️ Précision** : Google n'applique aucun décompte horaire 5h ou hebdomadaire ; votre accès est permanent.")
+    elif active_provider_id == "openrouter":
+        credits = quota_info.get("credits_remaining", 0)
+        quota_lines.append(f"- **🌐 Solde crédits restants** : `${credits}`")
+    elif active_provider_id == "groq":
+        quota_lines.append(f"- **⚡ Régime** : **100% Gratuit** (30 requêtes / minute permanentes)")
+    elif active_provider_id == "ollama":
+        quota_lines.append(f"- **🦙 Régime** : **Local (0 € / 0 limite)** exécuté sur votre machine")
+    else:
+        if summary:
+            quota_lines.append(f"- **Statut** : {summary}")
+
+    quota_section = "\n".join(quota_lines)
+    thinking_detail = f"\n  - **Réflexion (Thinking)** : `{thinking_tokens:,}` tokens" if thinking_tokens > 0 else ""
+
+    report_markdown = f"""### 📊 Rapport de Consommation & Quotas (`/usage`)
+
+#### 🧠 Mémoire de Contexte (Discussion active)
+- **Modèle sélectionné** : `{model_name}` ({provider_name})
+- **Espace disponible** : **{remaining_percent}% libre** (`{remaining_tokens:,}` tokens restants sur `{limit:,}`)
+- **Dernier échange** :
+  - **Prompt / Entrée** : `{input_tokens:,}` tokens{thinking_detail}
+  - **Réponse générée** : `{output_tokens:,}` tokens
+  - **Total du message** : `{total_last:,}` tokens *({source_label})*
+
+#### 🔋 Forfait & Quota du Compte
+- **Fournisseur actif** : **{provider_name}** (`{active_provider_id}`)
+- **Formule / Plan** : `{plan}`
+- **Compte associé** : `{account}`
+{quota_section}
+
+#### 💬 Statistiques de la Discussion
+- **Messages échangés** : `{msg_count}` message(s)
+- **Cumul tokens consommés** : `{total_conv_tokens:,}` tokens
+- **Coût de la commande `/usage`** : **0 token** (calcul local instantané ⚡)
+"""
+
+    report_usage = {
+        "total_tokens": 0,
+        "input_tokens": 0,
+        "output_tokens": 0,
+        "thinking_tokens": 0,
+        "context_limit": limit,
+        "remaining_tokens": remaining_tokens,
+        "remaining_percent": remaining_percent,
+        "source": "exact",
+    }
+
+    return report_markdown.strip(), report_usage
 
 
 class ActiveTurn:
@@ -307,6 +427,35 @@ class TurnManager:
         final_duration = None
         final_usage = None
         active_provider_id = getattr(provider, "provider_id", "agy")
+
+        # Intercept local slash commands like /usage, /quota, /stats (0 LLM tokens, 0ms latency)
+        clean_prompt = prompt.strip().lower()
+        if clean_prompt in ("/usage", "à/usage", "/quota", "/stats", "/tokens") or clean_prompt.startswith("/usage "):
+            logger.info("Executing local /usage command for conversation %s", conv_id)
+            report_text, report_usage = build_usage_report(
+                conv_store=conv_store,
+                conv_id=conv_id,
+                provider=provider,
+                model=model,
+            )
+            time.sleep(0.05)
+            turn.emit({"type": "message", "content": report_text})
+            conv_store.add_message(
+                conv_id=conv_id,
+                role="assistant",
+                text=report_text,
+                tokens=0,
+                duration=0.05,
+                usage=report_usage,
+            )
+            turn.emit({
+                "type": "done",
+                "response": report_text,
+                "duration_seconds": 0.05,
+                "usage": report_usage,
+            })
+            turn.status = "done"
+            return
 
         try:
             try:
