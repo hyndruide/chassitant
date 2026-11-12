@@ -43,6 +43,12 @@
       </div>
 
       <div class="drawer-footer">
+        <div id="drawer-quota-pill" class="footer-status-pill" style="margin-bottom: 6px; cursor: pointer;" title="Statut du Forfait & Quota IA (cliquez pour voir)">
+          <span style="display:flex; align-items:center; gap: 6px;">
+            <span id="drawer-quota-icon">🔋</span>
+            <span id="drawer-quota-text" style="font-size: 11.5px; font-weight: 500;">Forfait...</span>
+          </span>
+        </div>
         <div class="footer-status-pill">
           <span style="display:flex; align-items:center;">
             <span id="drawer-auth-dot" class="status-indicator offline"></span>
@@ -78,11 +84,11 @@
         </div>
 
         <div class="topbar-right">
-          <div id="topbar-context-badge" class="badge-tag context-gauge desktop-only" style="display: none; cursor: pointer;" title="Mémoire de la discussion courante (cliquez pour afficher les métriques complètes)">
+          <div id="topbar-context-badge" class="badge-tag context-gauge" style="display: none; cursor: pointer;" title="Mémoire de la discussion courante (cliquez pour afficher les métriques complètes)">
             <span class="context-gauge-icon">🧠</span>
             <span id="topbar-context-text">Mémoire : --%</span>
           </div>
-          <div id="topbar-quota-badge" class="badge-tag quota-badge desktop-only" style="display: none; cursor: pointer;" title="Forfait & Quota du compte IA actif (cliquez pour détails)">
+          <div id="topbar-quota-badge" class="badge-tag quota-badge" style="display: none; cursor: pointer;" title="Forfait & Quota du compte IA actif (cliquez pour détails)">
             <span id="topbar-quota-icon">🔋</span>
             <span id="topbar-quota-text">Quota...</span>
           </div>
@@ -160,7 +166,7 @@
               id="prompt-input"
               class="chat-textarea"
               rows="1"
-              placeholder="Écrivez à Françoise... (ex: Crée une automatisation, donne la météo, ou tapez /usage)..."
+              placeholder="Écrivez votre message à Françoise... (ex: Crée une automatisation, donne-moi la météo...)"
             ></textarea>
             <button id="btn-send" class="btn-send" title="Envoyer le message (Entrée)">
               ➤
@@ -435,7 +441,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.8.13</h3>
+            <h3>Françoise v1.8.14</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

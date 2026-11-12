@@ -380,7 +380,7 @@ class ChassitantRequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.OK,
                 {
                     "success": True,
-                    "version": "1.8.13",
+                    "version": "1.8.14",
                     "active_provider": active_prov.provider_id,
                     "provider_name": active_prov.display_name,
                     "agy_binary": self.agy_client.binary_path,

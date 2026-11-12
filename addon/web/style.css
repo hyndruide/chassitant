@@ -1545,6 +1545,16 @@ html, body {
     display: none !important;
   }
 
+  .badge-tag.context-gauge,
+  .badge-tag.quota-badge {
+    padding: 3px 7px;
+    font-size: 10.5px;
+    max-width: 140px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   .chat-container {
     padding: 12px 8px;
   }

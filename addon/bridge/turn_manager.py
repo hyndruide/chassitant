@@ -428,35 +428,6 @@ class TurnManager:
         final_usage = None
         active_provider_id = getattr(provider, "provider_id", "agy")
 
-        # Intercept local slash commands like /usage, /quota, /stats (0 LLM tokens, 0ms latency)
-        clean_prompt = prompt.strip().lower()
-        if clean_prompt in ("/usage", "à/usage", "/quota", "/stats", "/tokens") or clean_prompt.startswith("/usage "):
-            logger.info("Executing local /usage command for conversation %s", conv_id)
-            report_text, report_usage = build_usage_report(
-                conv_store=conv_store,
-                conv_id=conv_id,
-                provider=provider,
-                model=model,
-            )
-            time.sleep(0.05)
-            turn.emit({"type": "message", "content": report_text})
-            conv_store.add_message(
-                conv_id=conv_id,
-                role="assistant",
-                text=report_text,
-                tokens=0,
-                duration=0.05,
-                usage=report_usage,
-            )
-            turn.emit({
-                "type": "done",
-                "response": report_text,
-                "duration_seconds": 0.05,
-                "usage": report_usage,
-            })
-            turn.status = "done"
-            return
-
         try:
             try:
                 stream_iter = provider.process_stream(

@@ -111,6 +111,9 @@
     topbarQuotaBadge: document.getElementById('topbar-quota-badge'),
     topbarQuotaIcon: document.getElementById('topbar-quota-icon'),
     topbarQuotaText: document.getElementById('topbar-quota-text'),
+    drawerQuotaPill: document.getElementById('drawer-quota-pill'),
+    drawerQuotaIcon: document.getElementById('drawer-quota-icon'),
+    drawerQuotaText: document.getElementById('drawer-quota-text'),
     providerQuotaCard: document.getElementById('provider-quota-card'),
     providerQuotaIcon: document.getElementById('provider-quota-icon'),
     providerQuotaBadge: document.getElementById('provider-quota-badge'),
@@ -916,6 +919,12 @@
     el.topbarQuotaBadge.style.display = 'inline-flex';
     el.topbarQuotaBadge.title = `Forfait & Quota compte IA (${q.display_name || pid}) :\n${q.summary || 'Actif'}\n(Cliquez pour détails)`;
 
+    if (el.drawerQuotaIcon) el.drawerQuotaIcon.textContent = icon;
+    if (el.drawerQuotaText) el.drawerQuotaText.textContent = label;
+    if (el.drawerQuotaPill) {
+      el.drawerQuotaPill.title = `Forfait & Quota (${q.display_name || pid}) : ${q.summary || 'Actif'}\n(Cliquez pour détails)`;
+    }
+
     // Update settings modal card if present
     if (el.providerQuotaCard && el.providerQuotaContent) {
       if (el.providerQuotaIcon) el.providerQuotaIcon.textContent = icon;
@@ -1217,6 +1226,15 @@
   async function sendMessage() {
     const prompt = el.promptInput.value.trim();
     if (!prompt || state.isThinking) return;
+
+    // Check for quota / usage command: open dedicated quota view without posting to chat
+    const cleanCmd = prompt.trim().toLowerCase();
+    if (cleanCmd === '/usage' || cleanCmd === 'à/usage' || cleanCmd === '/quota' || cleanCmd === '/stats' || cleanCmd === '/tokens') {
+      el.promptInput.value = '';
+      el.promptInput.style.height = 'auto';
+      openSettings('tab-model');
+      return;
+    }
 
     if (!state.activeConvId) {
       await createNewConversation('Nouvelle conversation', true);
@@ -2371,9 +2389,15 @@
       });
     }
 
-    // Topbar Quota Badge click opens Settings on providers & quotas tab
+    // Topbar & Drawer Quota Badge click opens Settings on providers & quotas tab
     if (el.topbarQuotaBadge) {
       el.topbarQuotaBadge.addEventListener('click', () => {
+        openSettings('tab-model');
+      });
+    }
+    if (el.drawerQuotaPill) {
+      el.drawerQuotaPill.addEventListener('click', () => {
+        closeDrawer();
         openSettings('tab-model');
       });
     }
