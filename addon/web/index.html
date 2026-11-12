@@ -84,15 +84,15 @@
         </div>
 
         <div class="topbar-right">
-          <div id="topbar-context-badge" class="badge-tag context-gauge" style="display: none; cursor: pointer;" title="Mémoire de la discussion courante (cliquez pour afficher les métriques complètes)">
+          <div id="topbar-context-badge" class="badge-tag context-gauge desktop-only" style="display: none; cursor: pointer;" title="Mémoire de la discussion courante (cliquez pour afficher les métriques complètes)">
             <span class="context-gauge-icon">🧠</span>
             <span id="topbar-context-text">Mémoire : --%</span>
           </div>
-          <div id="topbar-quota-badge" class="badge-tag quota-badge" style="display: none; cursor: pointer;" title="Forfait & Quota du compte IA actif (cliquez pour détails)">
+          <div id="topbar-quota-badge" class="badge-tag quota-badge desktop-only" style="display: none; cursor: pointer;" title="Forfait & Quota du compte IA actif (cliquez pour détails)">
             <span id="topbar-quota-icon">🔋</span>
             <span id="topbar-quota-text">Quota...</span>
           </div>
-          <button id="btn-effort-toggle" class="badge-tag" style="cursor: pointer;" title="Niveau de réflexion de l'IA (cliquer pour changer : Rapide / Équilibré / Approfondi)">
+          <button id="btn-effort-toggle" class="badge-tag desktop-only" style="cursor: pointer;" title="Niveau de réflexion de l'IA (cliquer pour changer : Rapide / Équilibré / Approfondi)">
             <span id="effort-toggle-text">⚡ Rapide</span>
           </button>
           <button id="btn-compact-conv" class="btn-topbar-action desktop-only" style="font-size: 13px;" title="Compacter le contexte de cette conversation pour accélérer les réponses">
@@ -110,11 +110,29 @@
             <span>✨</span>
             <span id="topbar-model-text">Gemini 3.8 Flash</span>
           </div>
+          <button id="btn-topbar-new" class="btn-topbar-action mobile-only" title="Nouvelle discussion (➕)">
+            ➕
+          </button>
           <button id="btn-open-settings" class="btn-topbar-action" title="Paramètres et Outils MCP">
             ⚙️
           </button>
         </div>
       </header>
+
+      <!-- Mobile Status & Telemetry Strip (Dedicated clean bar on mobile < 768px) -->
+      <div id="mobile-status-strip" class="mobile-status-strip mobile-only">
+        <div id="mobile-context-pill" class="mobile-status-pill context-pill" title="Mémoire vive de la discussion active">
+          <span class="pill-icon">🧠</span>
+          <span id="mobile-context-text">Mémoire: --%</span>
+        </div>
+        <div id="mobile-quota-pill" class="mobile-status-pill quota-pill" title="Statut du forfait et quota IA">
+          <span id="mobile-quota-icon" class="pill-icon">🔋</span>
+          <span id="mobile-quota-text">Quota...</span>
+        </div>
+        <button id="btn-mobile-effort" class="mobile-status-pill effort-pill" title="Niveau de réflexion IA">
+          <span id="mobile-effort-text">⚡ Rapide</span>
+        </button>
+      </div>
 
       <!-- Chat Scroll View -->
       <div id="chat-scroll" class="chat-container">
@@ -161,6 +179,26 @@
       <!-- Chat Input Area -->
       <footer class="chat-input-area">
         <div class="chat-input-container">
+          <!-- Mobile Quick Action Chips (Smooth horizontal scrollable strip) -->
+          <div class="chat-quick-actions" id="chat-quick-actions">
+            <button type="button" class="quick-chip" id="chip-compact" title="Compacter la mémoire de la discussion pour accélérer">
+              <span class="chip-icon">🧹</span>
+              <span>Nettoyer</span>
+            </button>
+            <button type="button" class="quick-chip" id="chip-quota" title="Voir les quotas et forfaits IA">
+              <span class="chip-icon">🔋</span>
+              <span>Quotas</span>
+            </button>
+            <button type="button" class="quick-chip" id="chip-inventory" title="Guide des équipements et raccourcis de la maison">
+              <span class="chip-icon">🏠</span>
+              <span>Équipements</span>
+            </button>
+            <button type="button" class="quick-chip" id="chip-settings" title="Paramètres et réglages">
+              <span class="chip-icon">⚙️</span>
+              <span>Réglages</span>
+            </button>
+          </div>
+
           <div class="chat-input-box">
             <textarea
               id="prompt-input"
@@ -441,7 +479,7 @@
         <!-- Tab 4: About -->
         <div id="tab-about" class="tab-pane">
           <div style="display: flex; flex-direction: column; gap: 12px;">
-            <h3>Françoise v1.8.14</h3>
+            <h3>Françoise v1.8.15</h3>
             <p class="form-help">
               Module autonome Home Assistant intégrant Google Antigravity CLI (agy) et le serveur MCP Home Assistant.
             </p>

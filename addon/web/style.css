@@ -62,8 +62,131 @@ html, body {
   display: flex;
   width: 100vw;
   height: 100vh;
+  height: 100dvh;
   position: relative;
   overflow: hidden;
+}
+
+/* Visibility Utilities */
+.mobile-only {
+  display: none !important;
+}
+
+.desktop-only {
+  display: inline-flex !important;
+}
+
+/* Mobile Status Strip (Under Topbar) */
+.mobile-status-strip {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background-color: rgba(23, 25, 30, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--border-color);
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
+  z-index: 90;
+}
+
+.mobile-status-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11.5px;
+  font-weight: 500;
+  font-family: var(--font-mono, monospace);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-status-pill:active {
+  transform: scale(0.95);
+}
+
+.mobile-status-pill.context-pill {
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #4ade80;
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.mobile-status-pill.quota-pill {
+  border-color: rgba(168, 85, 247, 0.35);
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.08);
+}
+
+.mobile-status-pill.effort-pill {
+  border-color: rgba(59, 130, 246, 0.35);
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.08);
+}
+
+/* Chat Quick Action Chips (Above Input) */
+.chat-quick-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 2px 8px;
+  margin-bottom: 2px;
+}
+
+.chat-quick-actions::-webkit-scrollbar {
+  display: none;
+}
+
+.quick-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-full);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all var(--transition-fast);
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.quick-chip:hover {
+  background-color: var(--bg-surface-hover);
+  color: var(--text-primary);
+  border-color: var(--accent-color);
+}
+
+.quick-chip:active {
+  transform: scale(0.95);
+  background-color: var(--bg-surface-active);
+}
+
+.quick-chip .chip-icon {
+  font-size: 13px;
 }
 
 /* ==========================================================================
@@ -1469,6 +1592,23 @@ html, body {
    RESPONSIVE DESIGN (Mobile & Tablet)
    ========================================================================== */
 @media (max-width: 768px) {
+  /* Visibility toggles */
+  .mobile-only {
+    display: flex !important;
+  }
+
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* 1. Viewport & Dynamic Height */
+  .app-container {
+    height: 100vh;
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+
+  /* 2. Drawer Mobile Layout */
   .drawer {
     position: fixed;
     top: 0;
@@ -1504,9 +1644,28 @@ html, body {
     display: flex;
   }
 
+  /* 3. Drawer Touch Ergonomics (Rename & Delete buttons always accessible) */
+  .conv-actions {
+    display: flex !important;
+    opacity: 0.85;
+  }
+
+  .btn-icon-action {
+    padding: 8px;
+    font-size: 14px;
+    min-width: 36px;
+    min-height: 36px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+  }
+
+  /* 4. Topbar - Sleek & Uncluttered */
   .topbar {
     padding: 0 10px;
     padding-top: env(safe-area-inset-top, 0px);
+    height: 52px;
     gap: 8px;
   }
 
@@ -1517,22 +1676,23 @@ html, body {
   }
 
   .btn-hamburger {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 38px;
-    width: 38px;
-    height: 38px;
+    min-width: 40px;
+    width: 40px;
+    height: 40px;
     font-size: 19px;
     flex-shrink: 0;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-sm);
+    border-radius: var(--radius-md);
     cursor: pointer;
   }
 
   .active-conv-title {
-    font-size: 14px;
+    font-size: 14.5px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .topbar-right {
@@ -1540,31 +1700,164 @@ html, body {
     flex-shrink: 0;
   }
 
-  .badge-tag.desktop-only,
-  .btn-topbar-action.desktop-only {
-    display: none !important;
+  .btn-topbar-action {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    border-radius: var(--radius-md);
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
   }
 
-  .badge-tag.context-gauge,
-  .badge-tag.quota-badge {
-    padding: 3px 7px;
-    font-size: 10.5px;
-    max-width: 140px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  .btn-topbar-action:active {
+    transform: scale(0.92);
   }
 
+  /* 5. Mobile Status Strip */
+  .mobile-status-strip {
+    display: flex;
+  }
+
+  /* 6. Chat Messages & Bubble Width */
   .chat-container {
-    padding: 12px 8px;
+    padding: 10px 8px;
+    gap: 14px;
+  }
+
+  .message-row {
+    gap: 8px;
+  }
+
+  .message-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 15px;
+    flex-shrink: 0;
   }
 
   .message-bubble {
-    max-width: 95%;
+    max-width: calc(100% - 38px);
+    padding: 10px 13px;
+    font-size: 13.5px;
+    border-radius: 14px;
   }
 
+  .message-bubble table {
+    display: block;
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 12px;
+  }
+
+  .message-meta {
+    flex-wrap: wrap;
+    gap: 6px;
+    font-size: 10.5px;
+  }
+
+  /* 7. Input Area & Virtual Keyboard Adaptation */
   .chat-input-area {
-    padding: 8px 8px max(12px, env(safe-area-inset-bottom, 12px));
+    padding: 6px 10px max(10px, env(safe-area-inset-bottom, 10px));
+    background-color: var(--bg-secondary);
+  }
+
+  .chat-input-box {
+    padding: 6px 10px;
+    border-radius: 20px;
+  }
+
+  .chat-textarea {
+    font-size: 16px !important; /* Prevents auto-zoom on iOS Safari */
+    line-height: 1.4;
+    padding: 6px 4px;
+    min-height: 28px;
+  }
+
+  .btn-send {
+    width: 40px;
+    height: 40px;
+    font-size: 16px;
+  }
+
+  .btn-send:active {
+    transform: scale(0.92);
+  }
+
+  .input-footer-hint {
+    display: none;
+  }
+
+  /* 8. Modals Mobile Fullscreen */
+  .modal-overlay {
+    padding: 0 !important;
+    align-items: flex-end;
+  }
+
+  .modal-card {
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+    border: none !important;
+  }
+
+  .modal-header {
+    padding: 14px 16px;
+    padding-top: max(14px, env(safe-area-inset-top, 14px));
+  }
+
+  .btn-close-modal {
+    width: 38px;
+    height: 38px;
+    font-size: 22px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-tabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 0 8px;
+  }
+
+  .modal-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .modal-tab {
+    padding: 12px 14px;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .modal-body {
+    padding: 16px 14px;
+    gap: 14px;
+  }
+
+  .modal-footer {
+    padding: 12px 14px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+  }
+
+  /* 9. Welcome screen chips */
+  .suggestion-chips {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .suggestion-chip {
+    padding: 10px 12px;
+    font-size: 12.5px;
   }
 }
 

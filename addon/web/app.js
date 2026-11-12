@@ -111,6 +111,19 @@
     topbarQuotaBadge: document.getElementById('topbar-quota-badge'),
     topbarQuotaIcon: document.getElementById('topbar-quota-icon'),
     topbarQuotaText: document.getElementById('topbar-quota-text'),
+    btnTopbarNew: document.getElementById('btn-topbar-new'),
+    mobileStatusStrip: document.getElementById('mobile-status-strip'),
+    mobileContextPill: document.getElementById('mobile-context-pill'),
+    mobileContextText: document.getElementById('mobile-context-text'),
+    mobileQuotaPill: document.getElementById('mobile-quota-pill'),
+    mobileQuotaIcon: document.getElementById('mobile-quota-icon'),
+    mobileQuotaText: document.getElementById('mobile-quota-text'),
+    btnMobileEffort: document.getElementById('btn-mobile-effort'),
+    mobileEffortText: document.getElementById('mobile-effort-text'),
+    chipCompact: document.getElementById('chip-compact'),
+    chipQuota: document.getElementById('chip-quota'),
+    chipInventory: document.getElementById('chip-inventory'),
+    chipSettings: document.getElementById('chip-settings'),
     drawerQuotaPill: document.getElementById('drawer-quota-pill'),
     drawerQuotaIcon: document.getElementById('drawer-quota-icon'),
     drawerQuotaText: document.getElementById('drawer-quota-text'),
@@ -852,6 +865,13 @@
     el.topbarContextText.textContent = `Mémoire : ${remPct}% libre`;
     el.topbarContextBadge.title = `Mémoire vive (Contexte discussion) : ${remPct}% libre (${remTokens} tokens restants sur ${limitTokens} max)\nModèle : ${latestUsage.model || 'Actif'} (cliquez pour détails)`;
 
+    if (el.mobileContextText) {
+      el.mobileContextText.textContent = `Mémoire: ${remPct}%`;
+    }
+    if (el.mobileContextPill) {
+      el.mobileContextPill.title = `Mémoire : ${remPct}% libre (${remTokens} / ${limitTokens} tokens)`;
+    }
+
     el.topbarContextBadge.classList.remove('good', 'warning', 'danger');
     if (remPct > 50) {
       el.topbarContextBadge.classList.add('good');
@@ -923,6 +943,17 @@
     if (el.drawerQuotaText) el.drawerQuotaText.textContent = label;
     if (el.drawerQuotaPill) {
       el.drawerQuotaPill.title = `Forfait & Quota (${q.display_name || pid}) : ${q.summary || 'Actif'}\n(Cliquez pour détails)`;
+    }
+
+    if (el.mobileQuotaIcon) el.mobileQuotaIcon.textContent = icon;
+    if (el.mobileQuotaText) {
+      let mobileShort = label;
+      if (pid === 'agy') mobileShort = q.is_authenticated ? 'Gemini Inclus' : 'Non connecté';
+      else if (pid === 'codex') mobileShort = q.quota_5h_percent !== null && q.quota_5h_percent !== undefined ? `5h: ${q.quota_5h_percent}%` : 'ChatGPT';
+      el.mobileQuotaText.textContent = mobileShort;
+    }
+    if (el.mobileQuotaPill) {
+      el.mobileQuotaPill.title = `Forfait & Quota (${q.display_name || pid}) : ${q.summary || 'Actif'}`;
     }
 
     // Update settings modal card if present
@@ -2294,7 +2325,6 @@
   }
 
   function updateEffortBadge() {
-    if (!el.effortToggleText) return;
     const effortLabels = {
       'low': '⚡ Rapide',
       'medium': '⚖️ Équilibré',
@@ -2302,7 +2332,9 @@
       'max': '💥 Max',
     };
     const eff = state.settings.effort || 'low';
-    el.effortToggleText.textContent = effortLabels[eff] || '⚡ Rapide';
+    const effStr = effortLabels[eff] || '⚡ Rapide';
+    if (el.effortToggleText) el.effortToggleText.textContent = effStr;
+    if (el.mobileEffortText) el.mobileEffortText.textContent = effStr;
     if (el.selectEffort) el.selectEffort.value = eff;
   }
 
@@ -2402,10 +2434,65 @@
       });
     }
 
+    // Mobile Topbar New Chat Button
+    if (el.btnTopbarNew) {
+      el.btnTopbarNew.addEventListener('click', () => {
+        createNewConversation('Nouvelle conversation', true);
+      });
+    }
+
+    // Mobile Status Strip Pills
+    if (el.mobileContextPill) {
+      el.mobileContextPill.addEventListener('click', () => {
+        if (el.topbarContextBadge) el.topbarContextBadge.click();
+      });
+    }
+    if (el.mobileQuotaPill) {
+      el.mobileQuotaPill.addEventListener('click', () => {
+        openSettings('tab-model');
+      });
+    }
+    if (el.btnMobileEffort) {
+      el.btnMobileEffort.addEventListener('click', () => {
+        const order = ['low', 'medium', 'high'];
+        const currentIdx = order.indexOf(state.settings.effort);
+        const nextEffort = order[(currentIdx + 1) % order.length];
+        state.settings.effort = nextEffort;
+        localStorage.setItem('chassitant_effort', nextEffort);
+        updateEffortBadge();
+      });
+    }
+
+    // Mobile Quick Action Chips (Above input)
+    if (el.chipCompact) {
+      el.chipCompact.addEventListener('click', () => {
+        if (el.btnCompactConv) el.btnCompactConv.click();
+      });
+    }
+    if (el.chipQuota) {
+      el.chipQuota.addEventListener('click', () => {
+        openSettings('tab-model');
+      });
+    }
+    if (el.chipInventory) {
+      el.chipInventory.addEventListener('click', () => {
+        openInventory();
+      });
+    }
+    if (el.chipSettings) {
+      el.chipSettings.addEventListener('click', () => {
+        openSettings('tab-general');
+      });
+    }
+
     // Prompt input auto-resize & keyboard shortcuts
     el.promptInput.addEventListener('input', () => {
       el.promptInput.style.height = 'auto';
       el.promptInput.style.height = Math.min(el.promptInput.scrollHeight, 180) + 'px';
+    });
+
+    el.promptInput.addEventListener('focus', () => {
+      setTimeout(scrollToBottom, 250);
     });
 
     el.promptInput.addEventListener('keydown', (e) => {
